@@ -16,7 +16,6 @@ export default function LoginScreen() {
         placeholderTextColor="#666"
         returnKeyType="next"
         blurOnSubmit
-        // uncontrolled: no value/onChangeText
       />
 
       <Text style={styles.label}>Password</Text>
@@ -26,7 +25,6 @@ export default function LoginScreen() {
         placeholder=""
         placeholderTextColor="#666"
         returnKeyType="done"
-        // uncontrolled: no value/onChangeText
       />
     </View>
   );
