@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text, TextInput, StyleSheet } from "react-native";
+import { View, Text, TextInput, StyleSheet, Alert } from "react-native";
 
 export default function LoginScreen() {
   return (
@@ -16,6 +16,7 @@ export default function LoginScreen() {
         placeholderTextColor="#666"
         returnKeyType="next"
         blurOnSubmit
+        onSubmitEditing={() => Alert.alert("Email submitted")}
       />
 
       <Text style={styles.label}>Password</Text>
@@ -25,6 +26,7 @@ export default function LoginScreen() {
         placeholder=""
         placeholderTextColor="#666"
         returnKeyType="done"
+        onSubmitEditing={() => Alert.alert("Password submitted")}
       />
     </View>
   );
