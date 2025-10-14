@@ -14,8 +14,19 @@ export default function LoginScreen() {
         keyboardType="email-address"
         placeholder=""
         placeholderTextColor="#666"
-        returnKeyType="done"
+        returnKeyType="next"
         blurOnSubmit
+        // uncontrolled: no value/onChangeText
+      />
+
+      <Text style={styles.label}>Password</Text>
+      <TextInput
+        style={styles.input}
+        secureTextEntry
+        placeholder=""
+        placeholderTextColor="#666"
+        returnKeyType="done"
+        // uncontrolled: no value/onChangeText
       />
     </View>
   );
