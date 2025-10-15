@@ -1,4 +1,4 @@
-# Project Name
+# GatorGather
 
 A full-stack mobile application built with FastAPI, MongoDB, and React Native.
 
