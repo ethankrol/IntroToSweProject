@@ -87,7 +87,7 @@ The API will be available at `http://localhost:8000`
 
 ### 1. Navigate to frontend directory
 ```bash
-cd frontend
+cd mobile
 ```
 
 ### 2. Install dependencies
