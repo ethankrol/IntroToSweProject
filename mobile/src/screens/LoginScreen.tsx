@@ -126,7 +126,6 @@ export default function LoginScreen({ onValidLogin }: Props) {
             <Text style={styles.errorText}>{pwdError}</Text>
           )}
 
-          {/* Submit button: disabled until form is valid; shows spinner while loading */}
           <TouchableOpacity
             style={[styles.btn, !canSubmit && styles.btnDisabled]}
             onPress={onSubmit}
@@ -156,7 +155,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     padding: 24,
     gap: 8,
-    backgroundColor: "#003d31", // dark green background
+    backgroundColor: "#003d31",
   },
   logo: {
     width: 500,
@@ -168,14 +167,14 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 14,
     opacity: 0.95,
-    color: "#FDF7F2", // light label for contrast on dark bg
+    color: "#FDF7F2",
     marginTop: 6,
   },
   input: {
     borderWidth: 1,
     borderRadius: 8,
     padding: 12,
-    color: "#000000", // black text on white input for readability
+    color: "#000000",
     borderColor: "#00000022",
     backgroundColor: "#FFFFFF",
   },
@@ -183,7 +182,7 @@ const styles = StyleSheet.create({
     borderColor: "#d33",
   },
   errorText: {
-    color: "#FFB5B5", // slightly lighter red for dark bg
+    color: "#FFB5B5",
     marginTop: 4,
   },
   btn: {
