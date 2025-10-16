@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-
+import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import {
   View,
   Text,
@@ -68,76 +68,89 @@ export default function LoginScreen({ onValidLogin }: Props) {
   };
 
   return (
-    <View style={styles.container}>
+    <>
       <StatusBar barStyle="light-content" backgroundColor="#003d31" />
-
-      {/* Logo image */}
-      <Image
-        source={require("../../assets/adaptive-icon.png")}
-        style={styles.logo}
-        resizeMode="contain"
-        accessible
-        accessibilityLabel="GatorGather logo"
-      />
-
-      {/* Email label + input */}
-      <Text style={styles.label}>Email</Text>
-      <TextInput
-        // Base input style + conditional red border when invalid after touch
-        style={[styles.input, touchedEmail && !!emailError && styles.inputError]}
-        value={email} // Controlled value
-        onChangeText={setEmail} // Update state on type
-        onBlur={() => setTouchedEmail(true)} // Mark as touched on focus leave
-        autoCapitalize="none" // Emails aren’t capitalized
-        autoCorrect={false} // Disable autocorrect for emails
-        keyboardType="email-address" // Email keyboard on mobile
-        placeholder="gator@email.edu" // Hint text
-        placeholderTextColor="#666" // Dim hint color
-        returnKeyType="next" // Keyboard action
-        keyboardAppearance="dark"
-      />
-      {/* Inline error (only after user has interacted) */}
-      {touchedEmail && !!emailError && (
-        <Text style={styles.errorText}>{emailError}</Text>
-      )}
-
-      {/* Password label + input */}
-      <Text style={styles.label}>Password</Text>
-      <TextInput
-        style={[styles.input, touchedPwd && !!pwdError && styles.inputError]}
-        value={password}
-        onChangeText={setPassword}
-        onBlur={() => setTouchedPwd(true)}
-        secureTextEntry // Mask characters for privacy
-        placeholder="••••••"
-        placeholderTextColor="#666"
-        returnKeyType="done"
-        onSubmitEditing={onSubmit} // Enter key submits if valid
-        keyboardAppearance="dark"
-      />
-      {touchedPwd && !!pwdError && (
-        <Text style={styles.errorText}>{pwdError}</Text>
-      )}
-
-      {/* Submit button: disabled until form is valid; shows spinner while loading */}
-      <TouchableOpacity
-        style={[styles.btn, !canSubmit && styles.btnDisabled]}
-        onPress={onSubmit}
-        disabled={!canSubmit}
-        activeOpacity={0.8}
+      <KeyboardAwareScrollView
+        style={{ backgroundColor: "#003d31" }}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        enableOnAndroid
+        extraScrollHeight={40}   // nudge field above keyboard
       >
-        {loading ? (
-          <ActivityIndicator />
-        ) : (
-          <Text style={styles.btnText}>Log in</Text>
-        )}
-      </TouchableOpacity>
-    </View>
+        <View style={styles.container}>
+          {/* Logo image */}
+          <Image
+            source={require("../../assets/adaptive-icon.png")}
+            style={styles.logo}
+            resizeMode="contain"
+            accessible
+            accessibilityLabel="GatorGather logo"
+          />
+
+          {/* Email label + input */}
+          <Text style={styles.label}>Email</Text>
+          <TextInput
+            // Base input style + conditional red border when invalid after touch
+            style={[styles.input, touchedEmail && !!emailError && styles.inputError]}
+            value={email} // Controlled value
+            onChangeText={setEmail} // Update state on type
+            onBlur={() => setTouchedEmail(true)} // Mark as touched on focus leave
+            autoCapitalize="none" // Emails aren’t capitalized
+            autoCorrect={false} // Disable autocorrect for emails
+            keyboardType="email-address" // Email keyboard on mobile
+            placeholder="gator@email.edu" // Hint text
+            placeholderTextColor="#666" // Dim hint color
+            returnKeyType="next" // Keyboard action
+            keyboardAppearance="dark"
+          />
+          {/* Inline error (only after user has interacted) */}
+          {touchedEmail && !!emailError && (
+            <Text style={styles.errorText}>{emailError}</Text>
+          )}
+
+          {/* Password label + input */}
+          <Text style={styles.label}>Password</Text>
+          <TextInput
+            style={[styles.input, touchedPwd && !!pwdError && styles.inputError]}
+            value={password}
+            onChangeText={setPassword}
+            onBlur={() => setTouchedPwd(true)}
+            secureTextEntry // Mask characters for privacy
+            placeholder="••••••"
+            placeholderTextColor="#666"
+            returnKeyType="done"
+            onSubmitEditing={onSubmit} // Enter key submits if valid
+            keyboardAppearance="dark"
+          />
+          {touchedPwd && !!pwdError && (
+            <Text style={styles.errorText}>{pwdError}</Text>
+          )}
+
+          {/* Submit button: disabled until form is valid; shows spinner while loading */}
+          <TouchableOpacity
+            style={[styles.btn, !canSubmit && styles.btnDisabled]}
+            onPress={onSubmit}
+            disabled={!canSubmit}
+            activeOpacity={0.8}
+          >
+            {loading ? (
+              <ActivityIndicator />
+            ) : (
+              <Text style={styles.btnText}>Log in</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </KeyboardAwareScrollView>
+    </>
   );
 }
 
 // InputError applies a red border when invalid
 const styles = StyleSheet.create({
+  scrollContent: {
+    flexGrow: 1,               // allow centering + scroll when needed
+    justifyContent: "center",
+  },
   container: {
     flex: 1,
     justifyContent: "center",
@@ -189,4 +202,3 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 });
-
