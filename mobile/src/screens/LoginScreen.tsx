@@ -1,7 +1,10 @@
-import React from "react";
+import React, { useState } from "react";
 import { View, Text, TextInput, StyleSheet, Alert } from "react-native";
 
 export default function LoginScreen() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>GatorGather</Text>
@@ -9,6 +12,8 @@ export default function LoginScreen() {
       <Text style={styles.label}>Email</Text>
       <TextInput
         style={styles.input}
+        value={email}
+        onChangeText={setEmail}
         autoCapitalize="none"
         autoCorrect={false}
         keyboardType="email-address"
@@ -16,17 +21,21 @@ export default function LoginScreen() {
         placeholderTextColor="#666"
         returnKeyType="next"
         blurOnSubmit
-        onSubmitEditing={() => Alert.alert("Email submitted")}
+        onSubmitEditing={() => Alert.alert("Email submitted", email || "(empty)")}
       />
 
       <Text style={styles.label}>Password</Text>
       <TextInput
         style={styles.input}
+        value={password}
+        onChangeText={setPassword}
         secureTextEntry
         placeholder=""
         placeholderTextColor="#666"
         returnKeyType="done"
-        onSubmitEditing={() => Alert.alert("Password submitted")}
+        onSubmitEditing={() =>
+          Alert.alert("Password submitted", password ? "(captured)" : "(empty)")
+        }
       />
     </View>
   );
