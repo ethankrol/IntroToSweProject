@@ -9,11 +9,14 @@ import {
   ActivityIndicator,
 } from "react-native";
 
+type Props = {
+  onValidLogin?: () => void;
+};
 
  // Very simple, front-end email pattern, im assuming real validation will happen on backend
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export default function LoginScreen() {
+export default function LoginScreen({ onValidLogin }: Props) {
   /**
    * FORM STATE
    * - email/password: controlled inputs
@@ -25,7 +28,6 @@ export default function LoginScreen() {
   const [touchedEmail, setTouchedEmail] = useState(false);
   const [touchedPwd, setTouchedPwd] = useState(false);
   const [loading, setLoading] = useState(false);
-
 
   const emailError = useMemo(() => {
     if (!email) return "Email is required";
@@ -56,11 +58,7 @@ export default function LoginScreen() {
 
     try {
       setLoading(true);
-      // ---- Real fetch call will go here. This is just a placeholder
-      Alert.alert(
-        "Valid!",
-        `email=${email.trim()}\npassword length=${password.length}`
-      );
+      onValidLogin?.();    // When this is called App.tsx sets screen to EditEventScreen.tsx
     } finally {
       setLoading(false);
     }
