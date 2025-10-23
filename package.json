@@ -1,0 +1,9 @@
+{
+  "dependencies": {
+    "react-native-keyboard-aware-scroll-view": "^0.9.5"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.2",
+    "@types/react-native": "^0.72.8"
+  }
+}

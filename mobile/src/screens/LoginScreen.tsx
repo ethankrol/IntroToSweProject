@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   StatusBar,
 } from "react-native";
+import { useNavigation } from '@react-navigation/native';
 
 type Props = {
   onValidLogin?: () => void;
@@ -20,6 +21,7 @@ type Props = {
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function LoginScreen({ onValidLogin }: Props) {
+  const navigation = useNavigation();
   /**
    * FORM STATE
    * - email/password: controlled inputs
@@ -137,6 +139,12 @@ export default function LoginScreen({ onValidLogin }: Props) {
             ) : (
               <Text style={styles.btnText}>Log in</Text>
             )}
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('ResetPassword' as never)}
+            style={{ marginTop: 12 }}
+          >
+            <Text style={{ color: '#fff', textAlign: 'center', textDecorationLine: 'underline' }}>Forgot password?</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAwareScrollView>
