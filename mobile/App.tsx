@@ -4,10 +4,12 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
 import LoginScreen from "./src/screens/LoginScreen";
 import EditEventScreen from "./src/screens/EditEventScreen";
+import ResetPasswordScreen from "./src/screens/ResetPasswordScreen";
 
 type RootStackParamList = {
   Login: undefined;
   EditEvent: undefined;
+  ResetPassword: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -23,6 +25,11 @@ export default function App() {
             />
           )}
         </Stack.Screen>
+        <Stack.Screen
+          name="ResetPassword"
+          component={ResetPasswordScreen}
+          options={{ title: "Reset Password" }}
+        />
         <Stack.Screen
           name="EditEvent"
           component={EditEventScreen}
