@@ -16,6 +16,8 @@ export async function signup(payload: SignupPayload): Promise<any> {
     body: JSON.stringify(payload),
   });
 
+  console.log(JSON.stringify(payload))
+
   if (!res.ok) {
     // Try to surface backend error message if available
     let detail = "Signup failed";
