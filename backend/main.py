@@ -5,8 +5,17 @@ from app.models import User, Token, UserInDB, UserCreate
 from app.dependencies import get_current_user
 from app.database import lifespan, get_db
 from app.users import get_by_email, create_user
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],      # or list specific origins instead of "*"
+    allow_methods=["*"],
+    allow_headers=["*"],
+    allow_credentials=False,  # set True only with specific origins (no "*")
+)
 
 @app.post('/token', response_model=Token)
 def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):

@@ -28,20 +28,36 @@ def authenticate_user(db, email: str, password: str) -> UserInDB | None:
         return None
     return user
 
-def create_user(db, user: UserCreate):
-    existing_user = db['users'].find_one({'email': user.email})
+def create_user(db, user_in: UserCreate):
+    existing_user = db['users'].find_one({'email': user_in.email})
     if existing_user:
         raise HTTPException(
             status_code = status.HTTP_400_BAD_REQUEST,
             detail='User with this email already exists'
         )
-    logger.debug(user.model_dump())
-    user.hashed_password = get_password_hash(user.hashed_password)
-    user_dict = user.model_dump()
-    result = db['users'].insert_one(user_dict)
-    user_dict['_id'] = str(result.inserted_id)
+    # Build a typed User model from the incoming UserCreate by hashing the password
+    if not isinstance(user_in.password, str) or not user_in.password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Password is required'
+        )
 
-    return UserInDB(**user_dict)
+    user = User(
+        first_name=user_in.first_name,
+        last_name=user_in.last_name,
+        email=user_in.email,
+        hashed_password=get_password_hash(user_in.password),
+    )
+
+    # Never log secrets; if needed, log only keys for debugging
+    logger.debug({'keys': list(user.model_dump().keys())})
+
+    # Insert and build response
+    doc = user.model_dump()
+    result = db['users'].insert_one(doc)
+    doc['_id'] = str(result.inserted_id)
+
+    return UserInDB(**doc)
 
 
 

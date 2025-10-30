@@ -31,7 +31,7 @@ class UserCreate(BaseModel):
     first_name: str
     last_name: str
     email: EmailStr
-    hashed_password: str
+    password: str
 
 class User(BaseModel):
     first_name: str

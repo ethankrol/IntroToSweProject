@@ -31,8 +31,12 @@ export default function LoginScreen({ onValidLogin }: Props) {
    */
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [touchedEmail, setTouchedEmail] = useState(false);
   const [touchedPwd, setTouchedPwd] = useState(false);
+  const [touchedFirst, setTouchedFirst] = useState(false);
+  const [touchedLast, setTouchedLast] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const emailError = useMemo(() => {
@@ -47,8 +51,20 @@ export default function LoginScreen({ onValidLogin }: Props) {
     return "";
   }, [password]);
 
+  // Simple required validation for signup-only fields
+  const firstError = useMemo(() => {
+    if (!firstName.trim()) return "First name is required";
+    return "";
+  }, [firstName]);
+
+  const lastError = useMemo(() => {
+    if (!lastName.trim()) return "Last name is required";
+    return "";
+  }, [lastName]);
+
   // Only allow submit if both fields are valid and nothing is loading.
-  const canSubmit = !emailError && !pwdError && !loading;
+  const canSubmitLogin = !emailError && !pwdError && !loading;
+  const canSubmitSignup = !emailError && !pwdError && !firstError && !lastError && !loading;
 
   /**
    * SUBMIT HANDLER
@@ -60,7 +76,7 @@ export default function LoginScreen({ onValidLogin }: Props) {
     setTouchedEmail(true);
     setTouchedPwd(true);
 
-    if (!canSubmit) return;
+    if (!canSubmitLogin) return;
 
     try {
       setLoading(true);
@@ -73,13 +89,20 @@ export default function LoginScreen({ onValidLogin }: Props) {
   const onSignUp = () => {
     setTouchedEmail(true);
     setTouchedPwd(true);
+    setTouchedFirst(true);
+    setTouchedLast(true);
 
-    if (!canSubmit) return;
+    if (!canSubmitSignup) return;
 
     (async () => {
       try {
         setLoading(true);
-        await signup({ email, password });
+        await signup({
+          email,
+          password,
+          first_name: firstName.trim(),
+          last_name: lastName.trim(),
+        });
         Alert.alert("Success", "Account created.");
         onValidLogin?.();
       } catch (e: any) {
@@ -109,6 +132,43 @@ export default function LoginScreen({ onValidLogin }: Props) {
             accessible
             accessibilityLabel="GatorGather logo"
           />
+
+          {/* First / Last name side-by-side under logo */}
+          <View style={styles.nameRow}>
+            <View style={styles.nameCol}>
+              <Text style={[styles.label, styles.nameLabel]}>First name</Text>
+              <TextInput
+                style={[styles.input, touchedFirst && !!firstError && styles.inputError]}
+                value={firstName}
+                onChangeText={setFirstName}
+                onBlur={() => setTouchedFirst(true)}
+                placeholder="Albert"
+                placeholderTextColor="#666"
+                returnKeyType="next"
+                keyboardAppearance="dark"
+              />
+              {touchedFirst && !!firstError && (
+                <Text style={styles.errorText}>{firstError}</Text>
+              )}
+            </View>
+
+            <View style={styles.nameCol}>
+              <Text style={[styles.label, styles.nameLabel]}>Last name</Text>
+              <TextInput
+                style={[styles.input, touchedLast && !!lastError && styles.inputError]}
+                value={lastName}
+                onChangeText={setLastName}
+                onBlur={() => setTouchedLast(true)}
+                placeholder="Gator"
+                placeholderTextColor="#666"
+                returnKeyType="next"
+                keyboardAppearance="dark"
+              />
+              {touchedLast && !!lastError && (
+                <Text style={styles.errorText}>{lastError}</Text>
+              )}
+            </View>
+          </View>
 
           {/* Email label + input */}
           <Text style={styles.label}>Email</Text>
@@ -150,9 +210,9 @@ export default function LoginScreen({ onValidLogin }: Props) {
           )}
 
           <TouchableOpacity
-            style={[styles.btn, !canSubmit && styles.btnDisabled]}
+            style={[styles.btn, !canSubmitLogin && styles.btnDisabled]}
             onPress={onSubmit}
-            disabled={!canSubmit}
+            disabled={!canSubmitLogin}
             activeOpacity={0.8}
           >
             {loading ? (
@@ -164,9 +224,9 @@ export default function LoginScreen({ onValidLogin }: Props) {
 
           {/* Sign up button (same style as Log in) */}
           <TouchableOpacity
-            style={[styles.btn, !canSubmit && styles.btnDisabled]}
+            style={[styles.btn, !canSubmitSignup && styles.btnDisabled]}
             onPress={onSignUp}
-            disabled={!canSubmit}
+            disabled={!canSubmitSignup}
             activeOpacity={0.8}
           >
             <Text style={styles.btnText}>Sign up</Text>
@@ -202,6 +262,18 @@ const styles = StyleSheet.create({
     aspectRatio: 1,
     alignSelf: "center",
     marginBottom: 0,
+  },
+  nameRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 12,
+    marginTop: 8,
+  },
+  nameCol: {
+    flex: 1,
+  },
+  nameLabel: {
+    marginBottom: 6,
   },
   label: {
     fontSize: 14,
