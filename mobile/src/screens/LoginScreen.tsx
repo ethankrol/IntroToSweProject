@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   StatusBar,
 } from "react-native";
+import { signup } from "../services/auth";
 import { useNavigation } from '@react-navigation/native';
 
 type Props = {
@@ -67,6 +68,26 @@ export default function LoginScreen({ onValidLogin }: Props) {
     } finally {
       setLoading(false);
     }
+  };
+
+  const onSignUp = () => {
+    setTouchedEmail(true);
+    setTouchedPwd(true);
+
+    if (!canSubmit) return;
+
+    (async () => {
+      try {
+        setLoading(true);
+        await signup({ email, password });
+        Alert.alert("Success", "Account created.");
+        onValidLogin?.();
+      } catch (e: any) {
+        Alert.alert("Sign up failed", e?.message ?? "Please try again.");
+      } finally {
+        setLoading(false);
+      }
+    })();
   };
 
   return (
@@ -139,6 +160,16 @@ export default function LoginScreen({ onValidLogin }: Props) {
             ) : (
               <Text style={styles.btnText}>Log in</Text>
             )}
+          </TouchableOpacity>
+
+          {/* Sign up button (same style as Log in) */}
+          <TouchableOpacity
+            style={[styles.btn, !canSubmit && styles.btnDisabled]}
+            onPress={onSignUp}
+            disabled={!canSubmit}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.btnText}>Sign up</Text>
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() => navigation.navigate('ResetPassword' as never)}
