@@ -142,8 +142,7 @@ export default function EventsScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Text style={styles.header}>Events</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginBottom: 12 }}>
         <TouchableOpacity onPress={toggleRole} style={{ marginRight: 8 }}>
           <Text style={{ color: '#2563eb' }}>Switch to {role === 'admin' ? 'volunteer' : 'admin'}</Text>
         </TouchableOpacity>
@@ -161,22 +160,23 @@ export default function EventsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#ecfdf5',
     padding: 12
   },
   header: {
     fontSize: 22,
     fontWeight: '700',
     marginVertical: 12,
-    textAlign: 'center'
+    textAlign: 'center',
+    color: '#065f46'
   },
   card: {
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: '#bbf7d0',
     borderRadius: 8,
     padding: 12,
     marginBottom: 12,
-    backgroundColor: '#fafafa'
+    backgroundColor: '#d1fae5'
   },
   row: {
     flexDirection: 'row',
@@ -193,7 +193,7 @@ const styles = StyleSheet.create({
   },
   location: {
     marginTop: 6,
-    color: '#333'
+    color: '#134e4a'
   },
   description: {
     marginTop: 8,

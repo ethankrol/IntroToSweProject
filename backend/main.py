@@ -12,6 +12,9 @@ from app.database import lifespan, get_db
 from app.users import get_by_email, create_user, authenticate_user
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
+from typing import Optional, List, Dict
+from bson import ObjectId
+from datetime import datetime
 
 app = FastAPI(lifespan=lifespan)
 
@@ -62,17 +65,21 @@ def signup(user: UserCreate, db = Depends(get_db)):
         }
 
 
+class ResetRequest(BaseModel):
+    email: str
+
+
 @app.post('/request-reset')
-def request_password_reset(email: str, request: Request):
+def request_password_reset(payload: ResetRequest, request: Request):
     """Generate a one-time reset token and store its hash+expiry on the user doc.
     For minimal dev setup this endpoint returns the plain token in the response so you can
     paste it into the reset form; in production you'd email the token and not return it.
     """
     db = request.app.db
+    email = payload.email
     user = db['users'].find_one({'email': email})
-    # Always respond 200 to avoid leaking which emails exist
     if not user:
-        return {'ok': True}
+        raise HTTPException(status_code=404, detail='No account found with that email address. Please check your email or sign up for a new account.')
 
     import secrets, hashlib
     from datetime import datetime, timedelta
@@ -155,3 +162,152 @@ def reset_password(payload: ResetIn, request: Request):
     return {'ok': True}
 
 #@app.post('/login')
+
+# ---------------------- Event + Notification Models ----------------------
+class EventUpdate(BaseModel):
+    title: Optional[str] = None
+    time: Optional[str] = None  # ISO string or display string
+    address: Optional[str] = None
+    description: Optional[str] = None
+    is_private: Optional[bool] = None
+
+class EventOut(BaseModel):
+    id: str
+    title: str
+    host: Optional[str] = None
+    time: str
+    address: str
+    description: Optional[str] = None
+    attendees: List[str] = []
+    volunteers: List[str] = []
+    is_private: bool = False
+
+class NotificationOut(BaseModel):
+    id: str
+    event_id: Optional[str] = None
+    message: str
+    created_at: datetime
+    read: bool = False
+
+def _serialize_event(doc: Dict) -> EventOut:
+    return EventOut(
+        id=str(doc['_id']),
+        title=doc.get('title',''),
+        host=doc.get('host'),
+        time=doc.get('time',''),
+        address=doc.get('address',''),
+        description=doc.get('description'),
+        attendees=doc.get('attendees', []),
+        volunteers=doc.get('volunteers', []),
+        is_private=doc.get('is_private', False)
+    )
+
+def _create_notifications(db, event_doc: Dict, changed_fields: Dict):
+    if not changed_fields:
+        return
+    # recipients: only registered users (volunteers + attendees)
+    recipients = set(event_doc.get('volunteers', [])) | set(event_doc.get('attendees', []))
+    if not recipients:
+        return
+    human_map = {
+        'title': 'title',
+        'time': 'time',
+        'address': 'address',
+        'description': 'description',
+        'is_private': 'privacy setting'
+    }
+    msgs = []
+    for field, info in changed_fields.items():
+        old_val = info['old']
+        new_val = info['new']
+        if field == 'is_private':
+            text = f"Event '{event_doc.get('title','')}' privacy changed: now {'Private' if new_val else 'Public'}"
+        else:
+            text = f"Event '{event_doc.get('title','')}' {human_map.get(field, field)} changed from '{old_val}' to '{new_val}'"
+        msgs.append(text)
+    now = datetime.utcnow()
+    bulk_docs = []
+    for user_email in recipients:
+        for message in msgs:
+            bulk_docs.append({
+                'user_email': user_email,
+                'event_id': event_doc['_id'],
+                'message': message,
+                'created_at': now,
+                'read': False
+            })
+    if bulk_docs:
+        db['notifications'].insert_many(bulk_docs)
+
+# ---------------------- Event Endpoints ----------------------
+@app.get('/events/{event_id}', response_model=EventOut)
+def get_event(event_id: str, request: Request):
+    db = request.app.db
+    try:
+        oid = ObjectId(event_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail='Invalid event id')
+    doc = db['events'].find_one({'_id': oid})
+    if not doc:
+        raise HTTPException(status_code=404, detail='Event not found')
+    return _serialize_event(doc)
+
+@app.patch('/events/{event_id}', response_model=EventOut)
+def update_event(event_id: str, payload: EventUpdate, request: Request, current_user=Depends(get_current_user)):
+    db = request.app.db
+    # Simple admin check: assume host email is event host; only host can edit.
+    try:
+        oid = ObjectId(event_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail='Invalid event id')
+    doc = db['events'].find_one({'_id': oid})
+    if not doc:
+        raise HTTPException(status_code=404, detail='Event not found')
+    host_email = doc.get('host')
+    if host_email and host_email != current_user.email:
+        raise HTTPException(status_code=403, detail='Only the event host can edit this event')
+
+    update_ops = {}
+    changed = {}
+    for field in ['title','time','address','description','is_private']:
+        new_val = getattr(payload, field)
+        if new_val is not None and new_val != doc.get(field):
+            changed[field] = {'old': doc.get(field), 'new': new_val}
+            update_ops[field] = new_val
+
+    if update_ops:
+        db['events'].update_one({'_id': oid}, {'$set': update_ops})
+        # refresh doc
+        doc = db['events'].find_one({'_id': oid})
+        _create_notifications(db, doc, changed)
+
+    return _serialize_event(doc)
+
+# ---------------------- Notification Endpoints ----------------------
+@app.get('/notifications', response_model=List[NotificationOut])
+def list_notifications(request: Request, current_user=Depends(get_current_user)):
+    db = request.app.db
+    cursor = db['notifications'].find({'user_email': current_user.email}).sort('created_at', -1)
+    items = []
+    for n in cursor:
+        items.append(NotificationOut(
+            id=str(n['_id']),
+            event_id=str(n.get('event_id')) if n.get('event_id') else None,
+            message=n.get('message',''),
+            created_at=n.get('created_at'),
+            read=n.get('read', False)
+        ))
+    return items
+
+@app.post('/notifications/{notification_id}/read')
+def mark_notification_read(notification_id: str, request: Request, current_user=Depends(get_current_user)):
+    db = request.app.db
+    try:
+        oid = ObjectId(notification_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail='Invalid notification id')
+    doc = db['notifications'].find_one({'_id': oid})
+    if not doc or doc.get('user_email') != current_user.email:
+        raise HTTPException(status_code=404, detail='Notification not found')
+    db['notifications'].update_one({'_id': oid}, {'$set': {'read': True}})
+    return {'ok': True}
