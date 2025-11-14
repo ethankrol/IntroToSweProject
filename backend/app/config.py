@@ -5,6 +5,6 @@ class Settings(BaseSettings):
     ALGORITHM: str = 'HS256'
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     MONGO_URL: str
-    model_config = SettingsConfigDict(env_file = 'C:\Users\AMW\Documents\IntroToSWE\IntroToSweProject\backend\app\.env')
+    model_config = SettingsConfigDict(env_file = 'C:\\Users\\AMW\\Documents\\IntroToSWE\\IntroToSweProject\\backend\\app\\.env')
 
 settings = Settings()
