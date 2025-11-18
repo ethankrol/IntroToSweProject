@@ -11,7 +11,8 @@ import {
   ActivityIndicator,
   StatusBar,
 } from "react-native";
-import { signup } from "../services/auth";
+import { signup, login } from "../services/auth";
+import { setCookie } from "../services/cookie";
 import { useNavigation } from '@react-navigation/native';
 
 type Props = {
@@ -80,7 +81,14 @@ export default function LoginScreen({ onValidLogin }: Props) {
 
     try {
       setLoading(true);
-      onValidLogin?.(); // When this is called App.tsx sets screen to EditEventScreen.tsx
+      // Call login API
+      const result = await login(email.trim(), password);
+      // Store token as a cookie-like value on device
+      await setCookie('auth_token', result.access_token);
+      // Notify parent (App.tsx) to navigate to Home
+      onValidLogin?.();
+    } catch (e: any) {
+      Alert.alert('Login failed', e?.message ?? 'Please try again.');
     } finally {
       setLoading(false);
     }
@@ -279,7 +287,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     opacity: 0.95,
     color: "#FDF7F2",
-    marginTop: 6,
+    marginTop: 0,
   },
   input: {
     borderWidth: 1,
