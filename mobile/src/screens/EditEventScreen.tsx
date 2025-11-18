@@ -31,6 +31,8 @@ export default function EditEventScreen({ route, navigation }: any) {
     endTime: '',
     location: '',
     description: '',
+    lat?: number;
+    lng?: number;
   };
 
   // Enable LayoutAnimation on Android
@@ -63,6 +65,19 @@ export default function EditEventScreen({ route, navigation }: any) {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
+
+  React.useEffect(() => {
+  const loc = route?.params?.pickedLocation;
+  if (loc) {
+    setFields(f => ({
+      ...f,
+      location: loc.address,
+      lat: loc.lat,
+      lng: loc.lng,
+    }));
+  }
+}, [route?.params?.pickedLocation]);
+
 
   const toggleDatePicker = () => {
     setShowDatePicker(prev => !prev);
@@ -167,6 +182,26 @@ export default function EditEventScreen({ route, navigation }: any) {
         onChangeText={t => setFields(f => ({ ...f, location: t }))}
         placeholder="Location"
       />
+
+      <TouchableOpacity
+        style={{
+          marginTop: 8,
+          padding: 12,
+          backgroundColor: "#2563eb",
+          borderRadius: 8,
+          alignItems: "center",
+        }}
+        onPress={() =>
+          navigation.navigate("LocationPicker" as never, {
+            lat: fields.lat,
+            lng: fields.lng,
+            address: fields.location,
+            // where to come back to, optional
+          } as never)
+        }
+        >
+          <Text style={{ color: "#fff", fontWeight: "600" }}>Choose on map</Text>
+        </TouchableOpacity>
 
       {/* Description */}
       <Text style={styles.label}>Description</Text>
