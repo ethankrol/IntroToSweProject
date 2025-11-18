@@ -7,6 +7,7 @@ import EventsScreen from "./src/screens/EventsScreen";
 import EventDetailScreen from "./src/screens/EventDetailScreen";
 import EditEventScreen from "./src/screens/EditEventScreen";
 import ResetPasswordScreen from "./src/screens/ResetPasswordScreen";
+import SetPasswordScreen from './src/screens/SetPasswordScreen';
 
 type RootStackParamList = {
   Login: undefined;
@@ -14,6 +15,7 @@ type RootStackParamList = {
   EventDetail: { event: any; role?: 'admin' | 'volunteer' } | undefined;
   EditEvent: undefined;
   ResetPassword: undefined;
+  SetPasswordScreen: { token: string } | undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -40,6 +42,11 @@ export default function App() {
           name="EditEvent"
           component={EditEventScreen}
           options={{ title: "Edit Event" }}
+        />
+        <Stack.Screen
+          name="SetPasswordScreen"
+          component={SetPasswordScreen}
+          options={{ title: "Set New Password" }}
         />
       </Stack.Navigator>
     </NavigationContainer>
