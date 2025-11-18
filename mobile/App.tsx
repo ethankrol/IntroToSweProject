@@ -11,6 +11,7 @@ import ResetPasswordScreen from "./src/screens/ResetPasswordScreen";
 
 type RootStackParamList = {
   Login: undefined;
+  HomeScreen: undefined;
   Events: { role?: 'admin' | 'volunteer' } | undefined;
   EventDetail: { event: any; role?: 'admin' | 'volunteer' } | undefined;
   EditEvent: undefined;
@@ -27,11 +28,11 @@ export default function App() {
         <Stack.Screen name="Login" options={{ headerShown: false }}>
           {({ navigation }) => (
             <LoginScreen
-              onValidLogin={() => navigation.replace("Events")}
+              onValidLogin={() => navigation.replace("HomeScreen")}
             />
           )}
         </Stack.Screen>
-        <Stack.Screen name="Events" component={EventsScreen} options={{ title: 'Events' }} />
+        <Stack.Screen name="HomeScreen" component={HomeScreen} options={{ title: 'Events' }} />
         <Stack.Screen name="EventDetail" component={EventDetailScreen} options={{ title: 'Event Details' }} />
         <Stack.Screen
           name="ResetPassword"
