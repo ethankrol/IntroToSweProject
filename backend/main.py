@@ -63,14 +63,14 @@ def signup(user: UserCreate, db = Depends(get_db)):
     return {
         'message': 'User created successfully',
         'user': {
-            'id': new_user.id,
+            'id': str(new_user.id) if new_user.id is not None else None,
             'first_name': new_user.first_name,
             'last_name': new_user.last_name,
-            'email': new_user.email
-            }
+            'email': new_user.email,
         }
+    }
 
-@app.post('/event')
-def create_event()
+#@app.post('/event')
+#def create_event()
 
 #@app.post('/login')
