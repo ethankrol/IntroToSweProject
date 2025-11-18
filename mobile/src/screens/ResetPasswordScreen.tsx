@@ -13,16 +13,25 @@ export default function ResetPasswordScreen({ navigation }: any) {
 
     try {
       setSending(true);
-      // Placeholder: call your backend endpoint /auth/request-reset
-      // Example using fetch:
-      // await fetch('http://<YOUR_BACKEND>/auth/request-reset', { method: 'POST', body: JSON.stringify({ email }), headers: { 'Content-Type': 'application/json' } });
+      // Call backend to request password reset
+      const response = await fetch('http://localhost:8000/request-reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      });
 
-      // For now, show a success message
-      Alert.alert('If that email exists, an email has been sent with reset instructions.');
-      navigation.goBack();
+      if (!response.ok) {
+        const error = await response.json();
+        Alert.alert('Error', error.detail || 'Unable to send reset email');
+        return;
+      }
+
+      Alert.alert('Success', 'A password reset email has been sent to your email address.', [
+        { text: 'OK', onPress: () => navigation.goBack() }
+      ]);
     } catch (err) {
       console.error(err);
-      Alert.alert('Error sending reset email');
+      Alert.alert('Error', 'Unable to connect to server. Please try again later.');
     } finally {
       setSending(false);
     }

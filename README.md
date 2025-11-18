@@ -78,7 +78,7 @@ SECRET_KEY=your_secret_key_here
 
 ### 5. Run the server
 ```bash
-uvicorn app.main:app --reload
+uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
 The API will be available at `http://localhost:8000`
