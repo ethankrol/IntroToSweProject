@@ -62,6 +62,7 @@ export default function LocationPickerScreen({ route, navigation }: any) {
     navigation.goBack();
   };
 
+  // #AIGEN
   return (
     <View style={{ flex: 1 }}>
       {/* Search bar */}
