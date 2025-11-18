@@ -95,7 +95,7 @@ export default function App() {
         <Stack.Screen
           name="LocationPicker"
           component={LocationPickerScreen}
-          options={{ title: "Pick Location" }}
+          options={{ title: "Choose Location" }}
         />
       </Stack.Navigator>
     </NavigationContainer>

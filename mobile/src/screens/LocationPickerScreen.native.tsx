@@ -7,12 +7,21 @@ import {
   TouchableOpacity,
   ActivityIndicator,
 } from "react-native";
-import MapView, { Marker, MapPressEvent } from "react-native-maps";
+import MapView, { Marker } from "react-native-maps";
 
-const GOOGLE_API_KEY = "YOUR_GOOGLE_API_KEY_HERE";
+const API_BASE = "http://localhost:8000"; // backend for geocoding
+
+type MapPressEvent = {
+  nativeEvent: {
+    coordinate: {
+      latitude: number;
+      longitude: number;
+    };
+  };
+};
 
 export default function LocationPickerScreen({ route, navigation }: any) {
-  const initialLat = route?.params?.lat ?? 29.6516; // UF default-ish
+  const initialLat = route?.params?.lat ?? 29.6516; // UF-ish
   const initialLng = route?.params?.lng ?? -82.3248;
 
   const [search, setSearch] = useState(route?.params?.address ?? "");
@@ -31,29 +40,32 @@ export default function LocationPickerScreen({ route, navigation }: any) {
   const onMapPress = (e: MapPressEvent) => {
     const { latitude, longitude } = e.nativeEvent.coordinate;
     setMarker({ latitude, longitude });
-    setRegion(r => ({ ...r, latitude, longitude }));
+    setRegion((r) => ({ ...r, latitude, longitude }));
   };
 
   const searchAddress = async () => {
     if (!search.trim()) return;
     try {
       setLoading(true);
-      const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(
+      const url = `${API_BASE}/geocode?address=${encodeURIComponent(
         search.trim()
-      )}&key=${GOOGLE_API_KEY}`;
+      )}`;
+
       const res = await fetch(url);
-      const data = await res.json();
-      if (data.results && data.results[0]) {
-        const loc = data.results[0].geometry.location;
-        setMarker({ latitude: loc.lat, longitude: loc.lng });
-        setRegion(r => ({
-          ...r,
-          latitude: loc.lat,
-          longitude: loc.lng,
-        }));
-        // overwrite with nice formatted address
-        setSearch(data.results[0].formatted_address);
+      if (!res.ok) {
+        console.log("Geocode failed:", res.status);
+        return;
       }
+
+      const data = await res.json();
+      // backend returns { formatted_address, lat, lng }
+      setMarker({ latitude: data.lat, longitude: data.lng });
+      setRegion((r) => ({
+        ...r,
+        latitude: data.lat,
+        longitude: data.lng,
+      }));
+      setSearch(data.formatted_address);
     } catch (e) {
       console.log("Geocode error", e);
     } finally {
@@ -66,7 +78,9 @@ export default function LocationPickerScreen({ route, navigation }: any) {
       pickedLocation: {
         lat: marker.latitude,
         lng: marker.longitude,
-        address: search || `${marker.latitude.toFixed(5)}, ${marker.longitude.toFixed(5)}`,
+        address:
+          search ||
+          `${marker.latitude.toFixed(5)}, ${marker.longitude.toFixed(5)}`,
       },
     } as never);
   };
@@ -90,8 +104,13 @@ export default function LocationPickerScreen({ route, navigation }: any) {
         </TouchableOpacity>
       </View>
 
-      {/* Map */}
-      <MapView style={{ flex: 1 }} region={region} onRegionChangeComplete={setRegion} onPress={onMapPress}>
+      {/* Native map */}
+      <MapView
+        style={{ flex: 1 }}
+        region={region}
+        onRegionChangeComplete={setRegion}
+        onPress={onMapPress}
+      >
         <Marker coordinate={marker} />
       </MapView>
 
