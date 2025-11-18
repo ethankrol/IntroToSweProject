@@ -65,21 +65,18 @@ export default function EditEventScreen({ route, navigation }: any) {
   const [showEndPicker, setShowEndPicker] = useState(false);
 
   const toggleDatePicker = () => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setShowDatePicker(prev => !prev);
     setShowStartPicker(false);
     setShowEndPicker(false);
   };
 
   const toggleStartPicker = () => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setShowStartPicker(prev => !prev);
     setShowDatePicker(false);
     setShowEndPicker(false);
   };
 
   const toggleEndPicker = () => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setShowEndPicker(prev => !prev);
     setShowDatePicker(false);
     setShowStartPicker(false);
@@ -153,7 +150,7 @@ export default function EditEventScreen({ route, navigation }: any) {
       </View>
 
       {/* Reserved space for spinners to avoid glitches */}
-      <View style={{ minHeight: 180 }}>
+      <View>
         {showStartPicker && (
           <DateTimePicker value={startTime} mode="time" display="spinner" onChange={onChangeStart} />
         )}
