@@ -8,18 +8,22 @@ import {
   ActivityIndicator,
 } from "react-native";
 
-const API_BASE = "http://localhost:8000"; // backend for geocoding
+const API_BASE = "http://localhost:8000";
+
+type LocationPick = { lat: number; lng: number; address: string };
 
 export default function LocationPickerScreen({ route, navigation }: any) {
   const initialLat = route?.params?.lat ?? 29.6516;
   const initialLng = route?.params?.lng ?? -82.3248;
 
-  const [search, setSearch] = useState(route?.params?.address ?? "");
-  const [loading, setLoading] = useState(false);
+  const onPick =
+    (route?.params?.onPick as ((loc: LocationPick) => void) | undefined) ??
+    undefined;
 
-  // We'll keep lat/lng locally even without map, so returning still works
+  const [search, setSearch] = useState(route?.params?.address ?? "");
   const [lat, setLat] = useState(initialLat);
   const [lng, setLng] = useState(initialLng);
+  const [loading, setLoading] = useState(false);
 
   const searchAddress = async () => {
     if (!search.trim()) return;
@@ -28,12 +32,15 @@ export default function LocationPickerScreen({ route, navigation }: any) {
       const url = `${API_BASE}/geocode?address=${encodeURIComponent(
         search.trim()
       )}`;
+
       const res = await fetch(url);
       if (!res.ok) {
         console.log("Geocode failed:", res.status);
         return;
       }
+
       const data = await res.json();
+      // { formatted_address, lat, lng }
       setLat(data.lat);
       setLng(data.lng);
       setSearch(data.formatted_address);
@@ -45,13 +52,14 @@ export default function LocationPickerScreen({ route, navigation }: any) {
   };
 
   const onUseLocation = () => {
-    navigation.navigate("EditEvent" as never, {
-      pickedLocation: {
-        lat,
-        lng,
-        address: search || `${lat.toFixed(5)}, ${lng.toFixed(5)}`,
-      },
-    } as never);
+    const loc: LocationPick = {
+      lat,
+      lng,
+      address: search || `${lat.toFixed(5)}, ${lng.toFixed(5)}`,
+    };
+
+    onPick?.(loc);
+    navigation.goBack();
   };
 
   return (
@@ -73,12 +81,14 @@ export default function LocationPickerScreen({ route, navigation }: any) {
         </TouchableOpacity>
       </View>
 
+      {/* Fallback instead of map */}
       <View style={styles.webFallback}>
         <Text style={styles.webFallbackText}>
           Map view isn’t available on web in this build.
         </Text>
         <Text style={styles.webFallbackText}>
-          Use the search bar to pick a location, then press "Use this location".
+          Use the search bar above to pick a location, then press{" "}
+          &quot;Use this location&quot;.
         </Text>
         <Text style={styles.webFallbackText}>
           Current coords: {lat.toFixed(5)}, {lng.toFixed(5)}

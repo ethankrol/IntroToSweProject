@@ -9,7 +9,9 @@ import {
 } from "react-native";
 import MapView, { Marker } from "react-native-maps";
 
-const API_BASE = "http://localhost:8000"; // backend for geocoding
+const API_BASE = "http://localhost:8000";
+
+type LocationPick = { lat: number; lng: number; address: string };
 
 type MapPressEvent = {
   nativeEvent: {
@@ -21,8 +23,12 @@ type MapPressEvent = {
 };
 
 export default function LocationPickerScreen({ route, navigation }: any) {
-  const initialLat = route?.params?.lat ?? 29.6516; // UF-ish
+  const initialLat = route?.params?.lat ?? 29.6516; // UF coords
   const initialLng = route?.params?.lng ?? -82.3248;
+
+  const onPick =
+    (route?.params?.onPick as ((loc: LocationPick) => void) | undefined) ??
+    undefined;
 
   const [search, setSearch] = useState(route?.params?.address ?? "");
   const [region, setRegion] = useState({
@@ -74,15 +80,19 @@ export default function LocationPickerScreen({ route, navigation }: any) {
   };
 
   const onUseLocation = () => {
-    navigation.navigate("EditEvent" as never, {
-      pickedLocation: {
-        lat: marker.latitude,
-        lng: marker.longitude,
-        address:
-          search ||
-          `${marker.latitude.toFixed(5)}, ${marker.longitude.toFixed(5)}`,
-      },
-    } as never);
+    const loc: LocationPick = {
+      lat: marker.latitude,
+      lng: marker.longitude,
+      address:
+        search ||
+        `${marker.latitude.toFixed(5)}, ${marker.longitude.toFixed(5)}`,
+    };
+
+    // call back into EditEventScreen
+    onPick?.(loc);
+
+    // just pop this screen, don't push a new EditEvent
+    navigation.goBack();
   };
 
   return (
@@ -104,7 +114,7 @@ export default function LocationPickerScreen({ route, navigation }: any) {
         </TouchableOpacity>
       </View>
 
-      {/* Native map */}
+      {/* Map */}
       <MapView
         style={{ flex: 1 }}
         region={region}

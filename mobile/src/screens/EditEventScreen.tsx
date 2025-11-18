@@ -77,19 +77,6 @@ export default function EditEventScreen({ route, navigation }: any) {
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
 
-  // pick up location returned from LocationPicker
-  React.useEffect(() => {
-    const loc = route?.params?.pickedLocation;
-    if (loc) {
-      setFields((f) => ({
-        ...f,
-        location: loc.address,
-        lat: loc.lat,
-        lng: loc.lng,
-      }));
-    }
-  }, [route?.params?.pickedLocation]);
-
   const toggleDatePicker = () => {
     setShowDatePicker((prev) => !prev);
     setShowStartPicker(false);
@@ -232,11 +219,20 @@ export default function EditEventScreen({ route, navigation }: any) {
             lat: fields.lat,
             lng: fields.lng,
             address: fields.location,
+            onPick: (loc: { lat: number; lng: number; address: string }) => {
+              setFields((f) => ({
+                ...f,
+                location: loc.address,
+                lat: loc.lat,
+                lng: loc.lng,
+              }));
+            },
           } as never)
         }
       >
         <Text style={{ color: "#fff", fontWeight: "600" }}>Choose on map</Text>
       </TouchableOpacity>
+
 
       {/* Description */}
       <Text style={styles.label}>Description</Text>
