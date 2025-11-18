@@ -19,6 +19,16 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 def get_by_email(db, email: str) -> UserInDB | None:
     user_data = db['users'].find_one({'email': email})
     if user_data:
+        # If the stored _id is a string (from older records), convert it to
+        # a bson.ObjectId so downstream code that expects ObjectId sees a
+        # consistent type. If it's already an ObjectId, leave it.
+        if '_id' in user_data and isinstance(user_data['_id'], str):
+            try:
+                user_data['_id'] = ObjectId(user_data['_id'])
+            except Exception:
+                # leave as-is if it isn't a valid ObjectId string
+                pass
+
         return UserInDB(**user_data)
     return None
 
@@ -52,10 +62,15 @@ def create_user(db, user_in: UserCreate):
     # Never log secrets; if needed, log only keys for debugging
     logger.debug({'keys': list(user.model_dump().keys())})
 
-    # Insert and build response
-    doc = user.model_dump()
+    # Insert and build response. Dump using aliases so DB field names match
+    # the Pydantic model aliases (e.g. 'hashedPassword', 'createdAt'). This
+    # ensures later reads can construct UserInDB(**doc) without missing
+    # alias-only fields.
+    doc = user.model_dump(by_alias=True)
     result = db['users'].insert_one(doc)
-    doc['_id'] = str(result.inserted_id)
+    # Store the actual ObjectId returned by Mongo so future reads return
+    # a proper bson.ObjectId. This keeps DB representation natural.
+    doc['_id'] = result.inserted_id
 
     return UserInDB(**doc)
 

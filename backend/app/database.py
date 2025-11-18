@@ -13,3 +13,8 @@ async def lifespan(app: FastAPI):
 
 def get_db(request: Request):
     return request.app.db
+
+
+# Note: we keep DB helpers minimal. Converting ObjectId -> str should be
+# performed explicitly at the repository/DAO boundary so it's obvious where
+# types are transformed before creating Pydantic models.
