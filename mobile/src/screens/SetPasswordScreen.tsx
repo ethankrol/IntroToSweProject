@@ -6,7 +6,7 @@ import { API_BASE_URL } from '../config';
 
 type SetPasswordRouteParams = {
   SetPasswordScreen: {
-    token: string;
+    token?: string;
   };
 };
 
@@ -16,50 +16,52 @@ type NavigationProp = NativeStackNavigationProp<any>;
 export default function SetPasswordScreen() {
   const route = useRoute<SetPasswordScreenRouteProp>();
   const navigation = useNavigation<NavigationProp>();
-  const { token } = route.params || {};
-  
+  const [token, setToken] = useState(route.params?.token || '');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleDone = async () => {
+    if (!token) {
+      Alert.alert('Error', 'Please enter your reset token');
+      return;
+    }
     if (!newPassword || !confirmPassword) {
       Alert.alert('Error', 'Please fill in all fields');
       return;
     }
-
     if (newPassword !== confirmPassword) {
       Alert.alert('Error', 'Passwords do not match');
       return;
     }
-
     if (newPassword.length < 8) {
       Alert.alert('Error', 'Password must be at least 8 characters');
       return;
     }
 
+    navigation.navigate('PasswordResetConfirmationScreen');
+
+
     setLoading(true);
-    try {
-      const response = await fetch(`${API_BASE_URL}/reset`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, new_password: newPassword }),
-      });
+  try {
+    const response = await fetch(`${API_BASE_URL}/reset`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, new_password: newPassword }),
+    });
 
-      const data = await response.json();
+    const data = await response.json();
 
-      if (response.ok && data.ok) {
-        Alert.alert('Success', 'Password reset successfully', [
-          { text: 'OK', onPress: () => navigation.navigate('Login') }
-        ]);
-      } else {
-        Alert.alert('Error', data.detail || 'Failed to reset password');
-      }
-    } catch (error) {
-      Alert.alert('Error', 'Network error. Please try again.');
-    } finally {
-      setLoading(false);
+    if (response.ok && data.ok) {
+      navigation.navigate('PasswordResetConfirmationScreen');
+    } else {
+      Alert.alert('Error', data.detail || 'Failed to reset password');
     }
+  } catch (error) {
+    Alert.alert('Error', 'Network error. Please try again.');
+  } finally {
+    setLoading(false);
+  }
   };
 
   const handleCancel = () => {
@@ -76,7 +78,17 @@ export default function SetPasswordScreen() {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Set New Password</Text>
-      <Text style={styles.subtitle}>Enter and confirm your new password</Text>
+      <Text style={styles.subtitle}>Paste your reset token and enter your new password</Text>
+
+      <TextInput
+        style={styles.input}
+        placeholder="Reset Token"
+        placeholderTextColor="#999"
+        value={token}
+        onChangeText={setToken}
+        autoCapitalize="none"
+        editable={!loading}
+      />
 
       <TextInput
         style={styles.input}

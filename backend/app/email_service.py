@@ -65,12 +65,11 @@ def send_email(to: str, subject: str, body: str) -> tuple[bool, str | None]:
         return False, str(e)
 
 def send_password_reset(to: str, token: str) -> tuple[bool, str | None]:
-    base = settings.FRONTEND_URL.rstrip('/')
-    link = f"{base}/reset-password?token={token}"
     subject = "Password Reset Instructions"
     body = (
         "You requested a password reset for your account.\n\n"
-        f"Click this link to reset your password (expires in 1 hour):\n\n{link}\n\n"
+        f"Your reset token is:\n\n{token}\n\n"
+        "Open the app, go to the password reset screen, and paste your token to set a new password.\n"
         "If you did not request this, ignore this email."
     )
     return send_email(to, subject, body)

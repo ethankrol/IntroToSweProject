@@ -8,6 +8,7 @@ import EventDetailScreen from "./src/screens/EventDetailScreen";
 import EditEventScreen from "./src/screens/EditEventScreen";
 import ResetPasswordScreen from "./src/screens/ResetPasswordScreen";
 import SetPasswordScreen from './src/screens/SetPasswordScreen';
+import PasswordResetConfirmationScreen from "./src/screens/PasswordResetConfirmationScreen";
 
 type RootStackParamList = {
   Login: undefined;
@@ -16,6 +17,7 @@ type RootStackParamList = {
   EditEvent: undefined;
   ResetPassword: undefined;
   SetPasswordScreen: { token: string } | undefined;
+  PasswordResetConfirmationScreen: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -47,6 +49,11 @@ export default function App() {
           name="SetPasswordScreen"
           component={SetPasswordScreen}
           options={{ title: "Set New Password" }}
+        />
+        <Stack.Screen
+          name="PasswordResetConfirmationScreen"
+          component={PasswordResetConfirmationScreen}
+          options={{ title: "Password Changed" }}
         />
       </Stack.Navigator>
     </NavigationContainer>
