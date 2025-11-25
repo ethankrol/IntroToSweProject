@@ -36,4 +36,5 @@ def get_current_user(token: str = Depends(oauth2_scheme), db = Depends(get_db)):
     user = db['users'].find_one({'email': email})
     if not user:
         raise HTTPException(status_code=404, detail='User not found')
+    # Return raw DB document; callers can map to Pydantic models as needed.
     return user

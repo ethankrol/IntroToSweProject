@@ -6,6 +6,7 @@ import LoginScreen from "./src/screens/LoginScreen";
 import EventsScreen from "./src/screens/EventsScreen";
 import EventDetailScreen from "./src/screens/EventDetailScreen";
 import EditEventScreen from "./src/screens/EditEventScreen";
+import HomeScreen from "./src/screens/HomeScreen";
 import ResetPasswordScreen from "./src/screens/ResetPasswordScreen";
 import SetPasswordScreen from './src/screens/SetPasswordScreen';
 import PasswordResetConfirmationScreen from "./src/screens/PasswordResetConfirmationScreen";
@@ -15,6 +16,7 @@ type RootStackParamList = {
   Events: { role?: 'admin' | 'volunteer' } | undefined;
   EventDetail: { event: any; role?: 'admin' | 'volunteer' } | undefined;
   EditEvent: undefined;
+  Home: undefined;
   ResetPassword: undefined;
   SetPasswordScreen: { token: string } | undefined;
   PasswordResetConfirmationScreen: undefined;
