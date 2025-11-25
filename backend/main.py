@@ -15,6 +15,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional, List, Dict
 from bson import ObjectId
 from datetime import datetime
+from pydantic import EmailStr
+from app.config import settings
+from app.email_service import send_password_reset, send_email
+
 
 app = FastAPI(lifespan=lifespan)
 
@@ -108,10 +112,7 @@ class ResetRequest(BaseModel):
 
 @app.post('/request-reset')
 def request_password_reset(payload: ResetRequest, request: Request):
-    """Generate a one-time reset token and store its hash+expiry on the user doc.
-    For minimal dev setup this endpoint returns the plain token in the response so you can
-    paste it into the reset form; in production you'd email the token and not return it.
-    """
+    """Generate a one-time reset token and store its hash+expiry on the user doc."""
     db = request.app.db
     email = payload.email
     user = db['users'].find_one({'email': email})
@@ -127,50 +128,14 @@ def request_password_reset(payload: ResetRequest, request: Request):
 
     db['users'].update_one({'email': email}, {'$set': {'reset_token_hash': token_hash, 'reset_token_expires': expires}})
 
-    # Try to send email if SMTP is configured. Read SMTP settings from env.
-    smtp_host = os.getenv('SMTP_HOST')
-    if smtp_host:
-        def send_reset_email(to_address: str, token_value: str) -> bool:
-            smtp_port = int(os.getenv('SMTP_PORT', '587'))
-            smtp_user = os.getenv('SMTP_USER')
-            smtp_pass = os.getenv('SMTP_PASS')
-            smtp_from = os.getenv('SMTP_FROM', smtp_user)
-            use_tls = os.getenv('SMTP_TLS', 'true').lower() in ('1', 'true', 'yes')
-            frontend = os.getenv('FRONTEND_URL', 'http://localhost:19006')
-            reset_link = f"{frontend}/reset?token={token_value}"
+    sent_ok, err = send_password_reset(email, token)
+    if sent_ok:
+        return {'ok': True}
+    if settings.DEBUG_EMAIL_FALLBACK:
+        return {'ok': True, 'token': token, 'email_error': err}
+    raise HTTPException(status_code=500, detail='Email send failed')
 
-            msg = EmailMessage()
-            msg['Subject'] = 'Password reset for GatorGather'
-            msg['From'] = smtp_from
-            msg['To'] = to_address
-            msg.set_content(f"You requested a password reset. Use the following link to reset your password (expires in 1 hour):\n\n{reset_link}\n\nIf you didn't request this, ignore this message.")
-
-            try:
-                if smtp_port == 465:
-                    context = ssl.create_default_context()
-                    with smtplib.SMTP_SSL(smtp_host, smtp_port, context=context) as server:
-                        if smtp_user and smtp_pass:
-                            server.login(smtp_user, smtp_pass)
-                        server.send_message(msg)
-                else:
-                    with smtplib.SMTP(smtp_host, smtp_port) as server:
-                        if use_tls:
-                            server.starttls(context=ssl.create_default_context())
-                        if smtp_user and smtp_pass:
-                            server.login(smtp_user, smtp_pass)
-                        server.send_message(msg)
-                return True
-            except Exception as e:
-                # Log error and fall back to returning token in response for dev
-                print('Failed to send reset email:', e)
-                return False
-
-        sent = send_reset_email(email, token)
-        if sent:
-            return {'ok': True}
-
-    # DEV: return token so it can be used in testing (don't do this in production)
-    return {'ok': True, 'token': token}
+    
 
 
 class ResetIn(BaseModel):
@@ -348,3 +313,13 @@ def mark_notification_read(notification_id: str, request: Request, current_user=
         raise HTTPException(status_code=404, detail='Notification not found')
     db['notifications'].update_one({'_id': oid}, {'$set': {'read': True}})
     return {'ok': True}
+
+
+# === Dev test endpoint (add this) ===
+class DevTestEmailIn(BaseModel):
+    to: EmailStr
+
+@app.post("/dev/test-email")
+def dev_test_email(payload: DevTestEmailIn):
+    ok, err = send_email(payload.to, "Test email", "This is a test from /dev/test-email")
+    return {"ok": ok, "error": err}
