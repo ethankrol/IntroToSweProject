@@ -31,10 +31,12 @@ export default function App() {
         <Stack.Screen name="Login" options={{ headerShown: false }}>
           {({ navigation }) => (
             <LoginScreen
-              onValidLogin={() => navigation.replace("Events")}
+              onValidLogin={() => navigation.replace("Home")}
+              //onValidLogin={() => navigation.replace("Events")}
             />
           )}
         </Stack.Screen>
+        <Stack.Screen name="Home" component = {HomeScreen} />
         <Stack.Screen name="Events" component={EventsScreen} options={{ title: 'Events' }} />
         <Stack.Screen name="EventDetail" component={EventDetailScreen} options={{ title: 'Event Details' }} />
         <Stack.Screen
