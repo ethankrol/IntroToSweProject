@@ -4,4 +4,4 @@
 // - Android emulator often needs http://10.0.2.2
 // - Physical devices need your machine's LAN IP, e.g. http://192.168.1.10:8000
 
-export const API_BASE_URL = "http://192.168.6.40:8000";
+export const API_BASE_URL = "http://192.168.86.24:8000";
