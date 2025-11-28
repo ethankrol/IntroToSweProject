@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -91,20 +91,6 @@ export default function EditEventScreen({ route, navigation }: any) {
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
 
-  // When returning from LocationPickerScreen, update location fields
-  useEffect(() => {
-    const picked = route?.params?.pickedLocation;
-    if (picked && picked.coordinates && Array.isArray(picked.coordinates)) {
-      const [lng, lat] = picked.coordinates;
-      setFields(f => ({
-        ...f,
-        location_name: picked.location_name ?? f.location_name ?? '',
-        location: { type: 'Point', coordinates: [lng, lat] }
-      }));
-      // Clear the param so it doesn't reapply on re-render
-      if (navigation?.setParams) navigation.setParams({ pickedLocation: undefined });
-    }
-  }, [route?.params?.pickedLocation]);
 
   const toggleDatePicker = () => {
     setShowDatePicker(prev => !prev);
@@ -174,7 +160,7 @@ export default function EditEventScreen({ route, navigation }: any) {
         location_name: fields.location_name || undefined,
         start_date: start.toISOString(),
         end_date: end.toISOString(),
-        // If left empty, backend will auto-generate
+        // Backend generates the unique codes for us, we should display this in the "event view" screen as well.
         ...(fields.delegate_join_code ? { delegate_join_code: fields.delegate_join_code } : {}),
         ...(fields.volunteer_join_code ? { volunteer_join_code: fields.volunteer_join_code } : {}),
       };
@@ -203,7 +189,7 @@ export default function EditEventScreen({ route, navigation }: any) {
 
       <Text style={styles.label}>Date</Text>
       <TouchableOpacity style={styles.dateBox} onPress={toggleDatePicker}>
-        <Text style={styles.dateText}>{fields.start_date ? formatDateLocal(new Date(fields.start_date)) : 'Tap to choose a date'}</Text>
+        <Text style={styles.dateText}>{formatDateLocal(date)}</Text>
       </TouchableOpacity>
       {showDatePicker && (
         <DateTimePicker value={date} mode="date" display="spinner" onChange={onChangeDate} />
@@ -244,9 +230,20 @@ export default function EditEventScreen({ route, navigation }: any) {
         <TouchableOpacity
           style={[styles.dateBox, { paddingVertical: 10, marginTop: 6 }]}
           onPress={() => {
+            const coords = fields.location?.coordinates || [undefined, undefined];
+            const lng = coords[0];
+            const lat = coords[1];
             navigation.navigate?.('LocationPicker', {
-              initialQuery: fields.location_name || '',
-              initialCoords: fields.location?.coordinates,
+              address: fields.location_name || '',
+              lat: typeof lat === 'number' ? lat : undefined,
+              lng: typeof lng === 'number' ? lng : undefined,
+              onPick: (loc: { lat: number; lng: number; address: string }) => {
+                setFields(f => ({
+                  ...f,
+                  location_name: loc.address,
+                  location: { type: 'Point', coordinates: [loc.lng, loc.lat] },
+                }));
+              },
             });
           }}
         >

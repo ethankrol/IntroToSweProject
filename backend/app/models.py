@@ -4,6 +4,10 @@ from bson import ObjectId
 from typing import Optional, Literal, List
 from datetime import datetime
 
+'''
+NOTE: Used ChatGPT to generate pydantic models for our database fields to ensure that we had a working user model from the beginning.
+'''
+
 # ------------------------------
 # Auth Models
 # ------------------------------

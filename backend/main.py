@@ -193,7 +193,7 @@ def upsert_event(event: EventUpsert, current_user = Depends(get_current_user)):
 def list_events(role: str, current_user=Depends(get_current_user)):
     """List events for a user by role: organizer|delegate|volunteer."""
     db = app.db
-    email = getattr(current_user, 'email', None) or (current_user.get('email') if isinstance(current_user, dict) else None)
+    email = getattr(current_user, 'email', None)
     if not email:
         raise HTTPException(status_code=500, detail='Missing user email')
     cursor = None
@@ -245,7 +245,6 @@ def join_event(payload: JoinEventIn, current_user=Depends(get_current_user)):
     event_id_str = str(doc['_id'])
     existing = db['event_volunteers'].find_one({'event_id': event_id_str, 'user_id': email})
     if existing:
-        # Already joined; optionally update role if differs
         if existing.get('role') != role:
             db['event_volunteers'].update_one({'_id': existing['_id']}, {'$set': {'role': role}})
     else:

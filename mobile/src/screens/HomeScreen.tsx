@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback} from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, Alert, FlatList, ActivityIndicator } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect} from '@react-navigation/native';
 import { fetchEvents, joinEvent } from '../services/events';
 import { EventResponse } from '../services/models/event_models';
 
@@ -25,6 +25,19 @@ export default function HomeScreen() {
       setLoading(false);
     }
   };
+
+  useFocusEffect(
+    useCallback(() => {
+      load(tab);
+
+      return () => {
+        console.log("Test for reloading events on navigation change");
+      };
+    }, [tab])
+  );
+
+  // Gonna add a feature here for reloading the screen once an event has been created
+  
 
   useEffect(() => { load(tab); }, [tab]);
 
