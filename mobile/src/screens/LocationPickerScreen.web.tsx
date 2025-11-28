@@ -7,8 +7,9 @@ import {
   TouchableOpacity,
   ActivityIndicator,
 } from "react-native";
+import {API_BASE_URL} from "../config";
 
-const API_BASE = "http://localhost:8000";
+const API_BASE = API_BASE_URL;
 
 type LocationPick = { lat: number; lng: number; address: string };
 
