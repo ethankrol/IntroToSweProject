@@ -2,6 +2,7 @@ from fastapi import FastAPI, Depends, HTTPException, status, Request, Response
 import os
 import smtplib
 import ssl
+import requests
 from email.message import EmailMessage
 from dotenv import load_dotenv
 from fastapi.security import OAuth2PasswordRequestForm
@@ -15,10 +16,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional, List, Dict
 from bson import ObjectId
 from datetime import datetime
+from fastapi import HTTPException
 from pydantic import EmailStr
 from app.config import settings
 from app.email_service import send_password_reset, send_email
-
 
 app = FastAPI(lifespan=lifespan)
 
@@ -317,6 +318,42 @@ def reset_password(payload: ResetIn, request: Request):
     new_hashed = get_password_hash(payload.new_password)
     db['users'].update_one({'_id': user['_id']}, {'$set': {'hashed_password': new_hashed}, '$unset': {'reset_token_hash': '', 'reset_token_expires': ''}})
     return {'ok': True}
+
+@app.get("/geocode")
+def geocode(address: str):
+    """
+    Proxy to Google Geocoding API so the mobile app never sees the real key.
+    """
+    if not settings.GOOGLE_MAPS_API_KEY:
+        raise HTTPException(status_code=500, detail="Geocoding not configured")
+
+    try:
+        resp = requests.get(
+            "https://maps.googleapis.com/maps/api/geocode/json",
+            params={"address": address, "key": settings.GOOGLE_MAPS_API_KEY},
+            timeout=10,
+        )
+    except Exception:
+        raise HTTPException(status_code=502, detail="Error contacting geocoding service")
+
+    if resp.status_code != 200:
+        raise HTTPException(status_code=502, detail="Bad response from geocoding service")
+
+    data = resp.json()
+    status_val = data.get("status")
+    results = data.get("results", [])
+
+    if status_val != "OK" or not results:
+        raise HTTPException(status_code=400, detail="Geocoding failed")
+
+    first = results[0]
+    loc = first["geometry"]["location"]
+    return {
+        "formatted_address": first["formatted_address"],
+        "lat": loc["lat"],
+        "lng": loc["lng"],
+    }
+
 
 #@app.post('/login')
 

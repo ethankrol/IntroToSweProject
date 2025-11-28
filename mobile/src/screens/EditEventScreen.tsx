@@ -9,7 +9,6 @@ import {
   Alert,
   Platform,
   TouchableOpacity,
-  LayoutAnimation,
   UIManager,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -25,6 +24,24 @@ type EventFields = {
   date: string;
   startTime: string;
   endTime: string;
+  location: string;
+  description: string;
+  lat?: number;
+  lng?: number;
+};
+
+export default function EditEventScreen({ route, navigation }: any) {
+  const initial: EventFields =
+    route?.params?.event ?? {
+      title: "",
+      date: "",
+      startTime: "",
+      endTime: "",
+      location: "",
+      description: "",
+      lat: undefined,
+      lng: undefined,
+    };
   lng: string; // longitude
   lat: string; // latitude
   delegate_join_code: string;
@@ -34,21 +51,24 @@ type EventFields = {
 export default function EditEventScreen({ route, navigation }: any) {
 
 
-  // Enable LayoutAnimation on Android
-  if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  // Enable LayoutAnimation on Android (optional)
+  if (
+    Platform.OS === "android" &&
+    UIManager.setLayoutAnimationEnabledExperimental
+  ) {
     UIManager.setLayoutAnimationEnabledExperimental(true);
   }
 
   const formatDateLocal = (date: Date) => {
     const year = date.getFullYear();
-    const month = (date.getMonth() + 1).toString().padStart(2, '0');
-    const day = date.getDate().toString().padStart(2, '0');
+    const month = (date.getMonth() + 1).toString().padStart(2, "0");
+    const day = date.getDate().toString().padStart(2, "0");
     return `${year}-${month}-${day}`;
   };
 
   const formatTime = (date: Date) => {
-    const h = date.getHours().toString().padStart(2, '0');
-    const m = date.getMinutes().toString().padStart(2, '0');
+    const h = date.getHours().toString().padStart(2, "0");
+    const m = date.getMinutes().toString().padStart(2, "0");
     return `${h}:${m}`;
   };
 
@@ -108,12 +128,18 @@ export default function EditEventScreen({ route, navigation }: any) {
   }, [incoming]);
 
   const [fields, setFields] = useState<EventFields>(initial);
-  const [date, setDate] = useState(initial.date ? new Date(initial.date) : new Date());
+  const [date, setDate] = useState(
+    initial.date ? new Date(initial.date) : new Date()
+  );
   const [startTime, setStartTime] = useState(
-    initial.startTime ? new Date(`1970-01-01T${initial.startTime}:00`) : new Date()
+    initial.startTime
+      ? new Date(`1970-01-01T${initial.startTime}:00`)
+      : new Date()
   );
   const [endTime, setEndTime] = useState(
-    initial.endTime ? new Date(`1970-01-01T${initial.endTime}:00`) : new Date()
+    initial.endTime
+      ? new Date(`1970-01-01T${initial.endTime}:00`)
+      : new Date()
   );
 
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -139,26 +165,26 @@ export default function EditEventScreen({ route, navigation }: any) {
   };
 
   const onChangeDate = (_event: any, selectedDate?: Date) => {
-    if (Platform.OS === 'android') setShowDatePicker(false);
+    if (Platform.OS === "android") setShowDatePicker(false);
     if (selectedDate) {
       setDate(selectedDate);
-      setFields(f => ({ ...f, date: formatDateLocal(selectedDate) }));
+      setFields((f) => ({ ...f, date: formatDateLocal(selectedDate) }));
     }
   };
 
   const onChangeStart = (_event: any, selectedDate?: Date) => {
-    if (Platform.OS === 'android') setShowStartPicker(false);
+    if (Platform.OS === "android") setShowStartPicker(false);
     if (selectedDate) {
       setStartTime(selectedDate);
-      setFields(f => ({ ...f, startTime: formatTime(selectedDate) }));
+      setFields((f) => ({ ...f, startTime: formatTime(selectedDate) }));
     }
   };
 
   const onChangeEnd = (_event: any, selectedDate?: Date) => {
-    if (Platform.OS === 'android') setShowEndPicker(false);
+    if (Platform.OS === "android") setShowEndPicker(false);
     if (selectedDate) {
       setEndTime(selectedDate);
-      setFields(f => ({ ...f, endTime: formatTime(selectedDate) }));
+      setFields((f) => ({ ...f, endTime: formatTime(selectedDate) }));
     }
   };
 
@@ -206,6 +232,7 @@ export default function EditEventScreen({ route, navigation }: any) {
       Alert.alert('Error', err?.message || 'Failed to save event');
     }
   };
+
   const onCancel = () => navigation.goBack?.();
 
   return (
@@ -224,35 +251,58 @@ export default function EditEventScreen({ route, navigation }: any) {
       {/* Date */}
       <Text style={styles.label}>Date</Text>
       <TouchableOpacity style={styles.dateBox} onPress={toggleDatePicker}>
-        <Text style={styles.dateText}>{fields.date || 'Tap to choose a date'}</Text>
+        <Text style={styles.dateText}>
+          {fields.date || "Tap to choose a date"}
+        </Text>
       </TouchableOpacity>
       {showDatePicker && (
-        <DateTimePicker value={date} mode="date" display="spinner" onChange={onChangeDate} />
+        <DateTimePicker
+          value={date}
+          mode="date"
+          display="spinner"
+          onChange={onChangeDate}
+        />
       )}
 
       {/* Start & End Time side by side */}
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 16 }}>
-        <View style={{ width: '48%' }}>
+      <View
+        style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 16 }}
+      >
+        <View style={{ width: "48%" }}>
           <Text style={styles.label}>Start Time</Text>
           <TouchableOpacity style={styles.dateBox} onPress={toggleStartPicker}>
-            <Text style={styles.dateText}>{fields.startTime || 'Tap to choose'}</Text>
+            <Text style={styles.dateText}>
+              {fields.startTime || "Tap to choose"}
+            </Text>
           </TouchableOpacity>
         </View>
-        <View style={{ width: '48%' }}>
+        <View style={{ width: "48%" }}>
           <Text style={styles.label}>End Time</Text>
           <TouchableOpacity style={styles.dateBox} onPress={toggleEndPicker}>
-            <Text style={styles.dateText}>{fields.endTime || 'Tap to choose'}</Text>
+            <Text style={styles.dateText}>
+              {fields.endTime || "Tap to choose"}
+            </Text>
           </TouchableOpacity>
         </View>
       </View>
 
-      {/* Reserved space for spinners to avoid glitches */}
+      {/* Reserved space for spinners */}
       <View>
         {showStartPicker && (
-          <DateTimePicker value={startTime} mode="time" display="spinner" onChange={onChangeStart} />
+          <DateTimePicker
+            value={startTime}
+            mode="time"
+            display="spinner"
+            onChange={onChangeStart}
+          />
         )}
         {showEndPicker && (
-          <DateTimePicker value={endTime} mode="time" display="spinner" onChange={onChangeEnd} />
+          <DateTimePicker
+            value={endTime}
+            mode="time"
+            display="spinner"
+            onChange={onChangeEnd}
+          />
         )}
       </View>
 
@@ -260,41 +310,45 @@ export default function EditEventScreen({ route, navigation }: any) {
       <Text style={styles.label}>Location Name</Text>
       <TextInput
         style={styles.input}
-        value={fields.location_name || ''}
-        onChangeText={t => setFields(f => ({ ...f, location_name: t }))}
-        placeholder="Location name (optional)"
+        value={fields.location}
+        onChangeText={(t) => setFields((f) => ({ ...f, location: t }))}
+        placeholder="Location"
       />
 
-      {/* Coordinates */}
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 16 }}>
-        <View style={{ width: '48%' }}>
-          <Text style={styles.label}>Longitude</Text>
-          <TextInput
-            style={styles.input}
-            value={fields.lng}
-            onChangeText={t => setFields(f => ({ ...f, lng: t }))}
-            placeholder="e.g. -73.9857"
-            keyboardType="decimal-pad"
-          />
-        </View>
-        <View style={{ width: '48%' }}>
-          <Text style={styles.label}>Latitude</Text>
-          <TextInput
-            style={styles.input}
-            value={fields.lat}
-            onChangeText={t => setFields(f => ({ ...f, lat: t }))}
-            placeholder="e.g. 40.7484"
-            keyboardType="decimal-pad"
-          />
-        </View>
-      </View>
+      <TouchableOpacity
+        style={{
+          marginTop: 8,
+          padding: 12,
+          backgroundColor: "#2563eb",
+          borderRadius: 8,
+          alignItems: "center",
+        }}
+        onPress={() =>
+          navigation.navigate("LocationPicker" as never, {
+            lat: fields.lat,
+            lng: fields.lng,
+            address: fields.location,
+            onPick: (loc: { lat: number; lng: number; address: string }) => {
+              setFields((f) => ({
+                ...f,
+                location: loc.address,
+                lat: loc.lat,
+                lng: loc.lng,
+              }));
+            },
+          } as never)
+        }
+      >
+        <Text style={{ color: "#fff", fontWeight: "600" }}>Choose on map</Text>
+      </TouchableOpacity>
+
 
       {/* Description */}
       <Text style={styles.label}>Description</Text>
       <TextInput
         style={[styles.input, styles.multiline]}
         value={fields.description}
-        onChangeText={t => setFields(f => ({ ...f, description: t }))}
+        onChangeText={(t) => setFields((f) => ({ ...f, description: t }))}
         placeholder="Description"
         multiline
         numberOfLines={4}
@@ -327,13 +381,27 @@ export default function EditEventScreen({ route, navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 16, backgroundColor: '#fff' },
-  header: { fontSize: 22, fontWeight: '700', marginBottom: 12, textAlign: 'center' },
-  label: { marginTop: 16, fontSize: 14, color: '#222' },
-  input: { borderWidth: 1, borderColor: '#ccc', borderRadius: 8, padding: 10, marginTop: 6, color: '#000' },
-  multiline: { minHeight: 80, textAlignVertical: 'top' },
-  dateBox: { borderWidth: 1, borderColor: '#ccc', backgroundColor: '#f2f2f2', padding: 12, borderRadius: 8, marginTop: 6 },
-  dateText: { fontSize: 16, color: '#000' },
-  buttonRow: { flexDirection: 'row', marginTop: 22, justifyContent: 'center' },
+  container: { padding: 16, backgroundColor: "#fff" },
+  header: { fontSize: 22, fontWeight: "700", marginBottom: 12, textAlign: "center" },
+  label: { marginTop: 16, fontSize: 14, color: "#222" },
+  input: {
+    borderWidth: 1,
+    borderColor: "#ccc",
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 6,
+    color: "#000",
+  },
+  multiline: { minHeight: 80, textAlignVertical: "top" },
+  dateBox: {
+    borderWidth: 1,
+    borderColor: "#ccc",
+    backgroundColor: "#f2f2f2",
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 6,
+  },
+  dateText: { fontSize: 16, color: "#000" },
+  buttonRow: { flexDirection: "row", marginTop: 22, justifyContent: "center" },
   buttonSpacer: { width: 12 },
 });

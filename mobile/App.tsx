@@ -8,15 +8,47 @@ import EventDetailScreen from "./src/screens/EventDetailScreen";
 import EditEventScreen from "./src/screens/EditEventScreen";
 import HomeScreen from "./src/screens/HomeScreen";
 import ResetPasswordScreen from "./src/screens/ResetPasswordScreen";
+import LocationPickerScreen from "./src/screens/LocationPickerScreen";
 import SetPasswordScreen from './src/screens/SetPasswordScreen';
 import PasswordResetConfirmationScreen from "./src/screens/PasswordResetConfirmationScreen";
 
-type RootStackParamList = {
+type Role = "admin" | "volunteer";
+
+export type RootStackParamList = {
   Login: undefined;
-  Events: { role?: 'admin' | 'volunteer' } | undefined;
-  EventDetail: { event: any; role?: 'admin' | 'volunteer' } | undefined;
-  EditEvent: undefined;
-  Home: undefined;
+  HomeScreen: undefined;
+  Events:
+    | {
+        role?: Role;
+      }
+    | undefined;
+
+  EventDetail:
+    | {
+        event: any;
+        role?: Role;
+      }
+    | undefined;
+
+  EditEvent:
+    | {
+        event?: any;
+        pickedLocation?: {
+          lat: number;
+          lng: number;
+          address: string;
+        };
+      }
+    | undefined;
+
+  LocationPicker:
+    | {
+        lat?: number;
+        lng?: number;
+        address?: string;
+      }
+    | undefined;
+
   ResetPassword: undefined;
   SetPasswordScreen: { token: string } | undefined;
   PasswordResetConfirmationScreen: undefined;
@@ -28,6 +60,7 @@ export default function App() {
   return (
     <NavigationContainer>
       <Stack.Navigator initialRouteName="Login">
+        {/* LOGIN */}
         <Stack.Screen name="Login" options={{ headerShown: false }}>
           {({ navigation }) => (
             <LoginScreen
@@ -44,20 +77,18 @@ export default function App() {
           component={ResetPasswordScreen}
           options={{ title: "Reset Password" }}
         />
+
+        {/* EDIT / CREATE EVENT */}
         <Stack.Screen
           name="EditEvent"
           component={EditEventScreen}
           options={{ title: "Edit Event" }}
         />
+        {/* LOCATION PICKER WITH MAP */}
         <Stack.Screen
-          name="SetPasswordScreen"
-          component={SetPasswordScreen}
-          options={{ title: "Set New Password" }}
-        />
-        <Stack.Screen
-          name="PasswordResetConfirmationScreen"
-          component={PasswordResetConfirmationScreen}
-          options={{ title: "Password Changed" }}
+          name="LocationPicker"
+          component={LocationPickerScreen}
+          options={{ title: "Choose Location" }}
         />
       </Stack.Navigator>
     </NavigationContainer>
