@@ -187,6 +187,77 @@ def upsert_event(event: EventUpsert, current_user = Depends(get_current_user)):
         doc['_id'] = str(doc['_id'])
     return EventOut.model_validate(doc)
 
+# -------- Event listing & joining endpoints --------
+@app.get('/events', response_model=List[EventOut])
+def list_events(role: str, current_user=Depends(get_current_user)):
+    """List events for a user by role: organizer|delegate|volunteer."""
+    db = app.db
+    email = getattr(current_user, 'email', None) or (current_user.get('email') if isinstance(current_user, dict) else None)
+    if not email:
+        raise HTTPException(status_code=500, detail='Missing user email')
+    cursor = None
+    if role == 'organizer':
+        cursor = db['events'].find({'created_by': email})
+    elif role in ('delegate','volunteer'):
+        # Lookup event volunteer docs then fetch events
+        ev_docs = list(db['event_volunteers'].find({'user_id': email, 'role': role}))
+        event_ids = [d.get('event_id') for d in ev_docs if d.get('event_id')]
+        # event_id stored as string; convert back to ObjectId for query
+        oids = []
+        for eid in event_ids:
+            try:
+                oids.append(ObjectId(eid))
+            except Exception:
+                continue
+        cursor = db['events'].find({'_id': {'$in': oids}}) if oids else []
+    else:
+        raise HTTPException(status_code=400, detail='Invalid role')
+
+    results = []
+    for doc in cursor:
+        if doc.get('_id'):
+            doc['_id'] = str(doc['_id'])
+        results.append(EventOut.model_validate(doc))
+    return results
+
+class JoinEventIn(BaseModel):
+    code: str
+
+@app.post('/event/join', response_model=EventOut)
+def join_event(payload: JoinEventIn, current_user=Depends(get_current_user)):
+    """Join an event using either delegate or volunteer join code."""
+    db = app.db
+    code = payload.code.strip().upper()
+    if len(code) != 6:
+        raise HTTPException(status_code=400, detail='Code must be 6 characters')
+    doc = db['events'].find_one({'delegate_join_code': code})
+    role = 'delegate'
+    if not doc:
+        doc = db['events'].find_one({'volunteer_join_code': code})
+        role = 'volunteer'
+    if not doc:
+        raise HTTPException(status_code=404, detail='Invalid join code')
+    email = getattr(current_user, 'email', None) or (current_user.get('email') if isinstance(current_user, dict) else None)
+    if not email:
+        raise HTTPException(status_code=500, detail='Missing user email')
+
+    event_id_str = str(doc['_id'])
+    existing = db['event_volunteers'].find_one({'event_id': event_id_str, 'user_id': email})
+    if existing:
+        # Already joined; optionally update role if differs
+        if existing.get('role') != role:
+            db['event_volunteers'].update_one({'_id': existing['_id']}, {'$set': {'role': role}})
+    else:
+        db['event_volunteers'].insert_one({
+            'event_id': event_id_str,
+            'user_id': email,
+            'role': role,
+            'joined_at': datetime.utcnow(),
+            'notes': ''
+        })
+    doc['_id'] = event_id_str
+    return EventOut.model_validate(doc)
+
 
 # ------------- Notification APIs -------------
 

@@ -32,7 +32,27 @@ type EventFields = {
 };
 
 export default function EditEventScreen({ route, navigation }: any) {
-  const incoming = route?.params?.event;
+
+
+  // Enable LayoutAnimation on Android
+  if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+    UIManager.setLayoutAnimationEnabledExperimental(true);
+  }
+
+  const formatDateLocal = (date: Date) => {
+    const year = date.getFullYear();
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const day = date.getDate().toString().padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const formatTime = (date: Date) => {
+    const h = date.getHours().toString().padStart(2, '0');
+    const m = date.getMinutes().toString().padStart(2, '0');
+    return `${h}:${m}`;
+  };
+
+    const incoming = route?.params?.event;
   // Try to normalize incoming event (support either old shape or new backend shape)
   const initial: EventFields = useMemo(() => {
     if (!incoming) {
@@ -86,24 +106,6 @@ export default function EditEventScreen({ route, navigation }: any) {
       volunteer_join_code: '',
     };
   }, [incoming]);
-
-  // Enable LayoutAnimation on Android
-  if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-    UIManager.setLayoutAnimationEnabledExperimental(true);
-  }
-
-  const formatDateLocal = (date: Date) => {
-    const year = date.getFullYear();
-    const month = (date.getMonth() + 1).toString().padStart(2, '0');
-    const day = date.getDate().toString().padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  };
-
-  const formatTime = (date: Date) => {
-    const h = date.getHours().toString().padStart(2, '0');
-    const m = date.getMinutes().toString().padStart(2, '0');
-    return `${h}:${m}`;
-  };
 
   const [fields, setFields] = useState<EventFields>(initial);
   const [date, setDate] = useState(initial.date ? new Date(initial.date) : new Date());
