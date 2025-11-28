@@ -9,6 +9,8 @@ import EditEventScreen from "./src/screens/EditEventScreen";
 import HomeScreen from "./src/screens/HomeScreen";
 import ResetPasswordScreen from "./src/screens/ResetPasswordScreen";
 import LocationPickerScreen from "./src/screens/LocationPickerScreen";
+import SetPasswordScreen from './src/screens/SetPasswordScreen';
+import PasswordResetConfirmationScreen from "./src/screens/PasswordResetConfirmationScreen";
 
 type Role = "admin" | "volunteer";
 
@@ -48,6 +50,8 @@ export type RootStackParamList = {
     | undefined;
 
   ResetPassword: undefined;
+  SetPasswordScreen: { token: string } | undefined;
+  PasswordResetConfirmationScreen: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -59,25 +63,15 @@ export default function App() {
         {/* LOGIN */}
         <Stack.Screen name="Login" options={{ headerShown: false }}>
           {({ navigation }) => (
-            <LoginScreen onValidLogin={() => navigation.replace("HomeScreen")} />
+            <LoginScreen
+              onValidLogin={() => navigation.replace("Home")}
+              //onValidLogin={() => navigation.replace("Events")}
+            />
           )}
         </Stack.Screen>
-
-        {/* HOME */}
-        <Stack.Screen
-          name="HomeScreen"
-          component={HomeScreen}
-          options={{ title: "Events" }}
-        />
-
-        {/* EVENT DETAIL */}
-        <Stack.Screen
-          name="EventDetail"
-          component={EventDetailScreen}
-          options={{ title: "Event Details" }}
-        />
-
-        {/* RESET PASSWORD */}
+        <Stack.Screen name="Home" component = {HomeScreen} />
+        <Stack.Screen name="Events" component={EventsScreen} options={{ title: 'Events' }} />
+        <Stack.Screen name="EventDetail" component={EventDetailScreen} options={{ title: 'Event Details' }} />
         <Stack.Screen
           name="ResetPassword"
           component={ResetPasswordScreen}
@@ -90,7 +84,6 @@ export default function App() {
           component={EditEventScreen}
           options={{ title: "Edit Event" }}
         />
-
         {/* LOCATION PICKER WITH MAP */}
         <Stack.Screen
           name="LocationPicker"

@@ -7,8 +7,8 @@ from email.message import EmailMessage
 from dotenv import load_dotenv
 from fastapi.security import OAuth2PasswordRequestForm
 from app.auth import create_access_token
-from app.models import User, Token, UserInDB, UserCreate
-from app.dependencies import get_current_user
+from app.models import *
+from app.auth import get_current_user
 from app.database import lifespan, get_db
 from app.users import get_by_email, create_user, authenticate_user
 from pydantic import BaseModel
@@ -16,8 +16,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional, List, Dict
 from bson import ObjectId
 from datetime import datetime
-from app.config import settings
 from fastapi import HTTPException
+from pydantic import EmailStr
+from app.config import settings
+from app.email_service import send_password_reset, send_email
 
 app = FastAPI(lifespan=lifespan)
 
@@ -34,6 +36,29 @@ app.add_middleware(
     allow_headers=["*"],
     allow_credentials=False
 )
+
+def _generate_join_code(length: int = 6) -> str:
+    import secrets, string
+    alphabet = string.ascii_uppercase + string.digits
+    return ''.join(secrets.choice(alphabet) for _ in range(length))
+
+def _code_exists(db, code: str, exclude_id: ObjectId | None = None) -> bool:
+    query: Dict = {
+        '$or': [
+            {'delegate_join_code': code},
+            {'volunteer_join_code': code},
+        ]
+    }
+    if exclude_id is not None:
+        query['_id'] = {'$ne': exclude_id}
+    return db['events'].find_one(query) is not None
+
+def _generate_unique_join_code(db, length: int = 6, max_attempts: int = 100, exclude_id: ObjectId | None = None) -> str:
+    for _ in range(max_attempts):
+        code = _generate_join_code(length)
+        if not _code_exists(db, code, exclude_id=exclude_id):
+            return code
+    raise HTTPException(status_code=500, detail='Failed to generate a unique join code')
 
 @app.post('/token', response_model=Token)
 def login_for_access_token(
@@ -68,10 +93,8 @@ def login_for_access_token(
 
     return {"access_token": access_token, "token_type": "bearer"}
 def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
-    db = get_db
     # authenticate_user expects db instance; obtain via request? use app.db via get_db shim
     # Since get_db is a dependency that expects Request, reuse users.authenticate_user by querying directly
-    from app.database import get_db as _get_db
     # create a dummy request-like object is not needed; instead access app.db directly
     db_instance = app.db
     user = authenticate_user(db_instance, form_data.username, form_data.password)
@@ -101,9 +124,143 @@ def signup(user: UserCreate, db = Depends(get_db)):
         }
     }
 
-#@app.post('/event')
-#def create_event()
+# ------------ Event upsert API (create or update) ------------
+class EventUpsert(EventBase):
+    id: Optional[str] = Field(default=None, alias="_id")
+    # Allow backend to generate codes if omitted on create
+    delegate_join_code: Optional[str] = Field(default=None, alias='delegate_join_code')
+    volunteer_join_code: Optional[str] = Field(default=None, alias='volunteer_join_code')
 
+@app.patch('/event', response_model=EventOut)
+def upsert_event(event: EventUpsert, current_user = Depends(get_current_user)):
+    """
+    Create a new event when `_id` is not provided; otherwise update the existing event.
+    """
+    db = app.db
+    payload = event.model_dump(by_alias=True, exclude_unset=True)
+    now = datetime.utcnow()
+
+    doc: Dict = {}
+    if payload.get('_id'):
+        # Update existing
+        try:
+            oid = ObjectId(payload['_id'])
+        except Exception:
+            raise HTTPException(status_code=400, detail='Invalid event id')
+        payload.pop('_id', None)
+        # If client attempts to change codes, enforce uniqueness
+        if 'delegate_join_code' in payload:
+            code = payload['delegate_join_code']
+            if code and _code_exists(db, code, exclude_id=oid):
+                raise HTTPException(status_code=409, detail='delegate_join_code already in use')
+        if 'volunteer_join_code' in payload:
+            code = payload['volunteer_join_code']
+            if code and _code_exists(db, code, exclude_id=oid):
+                raise HTTPException(status_code=409, detail='volunteer_join_code already in use')
+        payload['updated_at'] = now
+        res = db['events'].update_one({'_id': oid}, {'$set': payload})
+        if res.matched_count == 0:
+            raise HTTPException(status_code=404, detail='Event not found')
+        doc = db['events'].find_one({'_id': oid}) or {}
+    else:
+        # Create new
+        payload['created_by'] = getattr(current_user, 'email', None) or (
+            current_user.get('email') if isinstance(current_user, dict) else None
+        )
+        if not payload['created_by']:
+            raise HTTPException(status_code=500, detail='Unable to determine creator email')
+        # Generate join codes if not provided
+        if not payload.get('delegate_join_code'):
+            payload['delegate_join_code'] = _generate_unique_join_code(db)
+        if not payload.get('volunteer_join_code'):
+            # Ensure volunteer code differs from delegate code too
+            code = _generate_unique_join_code(db)
+            while code == payload['delegate_join_code']:
+                code = _generate_unique_join_code(db)
+            payload['volunteer_join_code'] = code
+        payload['created_at'] = now
+        payload['updated_at'] = now
+        result = db['events'].insert_one(payload)
+        doc = db['events'].find_one({'_id': result.inserted_id}) or {}
+
+    # Coerce ObjectId to string for response model
+    if doc.get('_id'):
+        doc['_id'] = str(doc['_id'])
+    return EventOut.model_validate(doc)
+
+# -------- Event listing & joining endpoints --------
+@app.get('/events', response_model=List[EventOut])
+def list_events(role: str, current_user=Depends(get_current_user)):
+    """List events for a user by role: organizer|delegate|volunteer."""
+    db = app.db
+    email = getattr(current_user, 'email', None) or (current_user.get('email') if isinstance(current_user, dict) else None)
+    if not email:
+        raise HTTPException(status_code=500, detail='Missing user email')
+    cursor = None
+    if role == 'organizer':
+        cursor = db['events'].find({'created_by': email})
+    elif role in ('delegate','volunteer'):
+        # Lookup event volunteer docs then fetch events
+        ev_docs = list(db['event_volunteers'].find({'user_id': email, 'role': role}))
+        event_ids = [d.get('event_id') for d in ev_docs if d.get('event_id')]
+        # event_id stored as string; convert back to ObjectId for query
+        oids = []
+        for eid in event_ids:
+            try:
+                oids.append(ObjectId(eid))
+            except Exception:
+                continue
+        cursor = db['events'].find({'_id': {'$in': oids}}) if oids else []
+    else:
+        raise HTTPException(status_code=400, detail='Invalid role')
+
+    results = []
+    for doc in cursor:
+        if doc.get('_id'):
+            doc['_id'] = str(doc['_id'])
+        results.append(EventOut.model_validate(doc))
+    return results
+
+class JoinEventIn(BaseModel):
+    code: str
+
+@app.post('/event/join', response_model=EventOut)
+def join_event(payload: JoinEventIn, current_user=Depends(get_current_user)):
+    """Join an event using either delegate or volunteer join code."""
+    db = app.db
+    code = payload.code.strip().upper()
+    if len(code) != 6:
+        raise HTTPException(status_code=400, detail='Code must be 6 characters')
+    doc = db['events'].find_one({'delegate_join_code': code})
+    role = 'delegate'
+    if not doc:
+        doc = db['events'].find_one({'volunteer_join_code': code})
+        role = 'volunteer'
+    if not doc:
+        raise HTTPException(status_code=404, detail='Invalid join code')
+    email = getattr(current_user, 'email', None) or (current_user.get('email') if isinstance(current_user, dict) else None)
+    if not email:
+        raise HTTPException(status_code=500, detail='Missing user email')
+
+    event_id_str = str(doc['_id'])
+    existing = db['event_volunteers'].find_one({'event_id': event_id_str, 'user_id': email})
+    if existing:
+        # Already joined; optionally update role if differs
+        if existing.get('role') != role:
+            db['event_volunteers'].update_one({'_id': existing['_id']}, {'$set': {'role': role}})
+    else:
+        db['event_volunteers'].insert_one({
+            'event_id': event_id_str,
+            'user_id': email,
+            'role': role,
+            'joined_at': datetime.utcnow(),
+            'notes': ''
+        })
+    doc['_id'] = event_id_str
+    return EventOut.model_validate(doc)
+
+
+# ------------- Notification APIs -------------
 
 class ResetRequest(BaseModel):
     email: str
@@ -111,10 +268,7 @@ class ResetRequest(BaseModel):
 
 @app.post('/request-reset')
 def request_password_reset(payload: ResetRequest, request: Request):
-    """Generate a one-time reset token and store its hash+expiry on the user doc.
-    For minimal dev setup this endpoint returns the plain token in the response so you can
-    paste it into the reset form; in production you'd email the token and not return it.
-    """
+    """Generate a one-time reset token and store its hash+expiry on the user doc."""
     db = request.app.db
     email = payload.email
     user = db['users'].find_one({'email': email})
@@ -130,50 +284,14 @@ def request_password_reset(payload: ResetRequest, request: Request):
 
     db['users'].update_one({'email': email}, {'$set': {'reset_token_hash': token_hash, 'reset_token_expires': expires}})
 
-    # Try to send email if SMTP is configured. Read SMTP settings from env.
-    smtp_host = os.getenv('SMTP_HOST')
-    if smtp_host:
-        def send_reset_email(to_address: str, token_value: str) -> bool:
-            smtp_port = int(os.getenv('SMTP_PORT', '587'))
-            smtp_user = os.getenv('SMTP_USER')
-            smtp_pass = os.getenv('SMTP_PASS')
-            smtp_from = os.getenv('SMTP_FROM', smtp_user)
-            use_tls = os.getenv('SMTP_TLS', 'true').lower() in ('1', 'true', 'yes')
-            frontend = os.getenv('FRONTEND_URL', 'http://localhost:19006')
-            reset_link = f"{frontend}/reset?token={token_value}"
+    sent_ok, err = send_password_reset(email, token)
+    if sent_ok:
+        return {'ok': True}
+    if settings.DEBUG_EMAIL_FALLBACK:
+        return {'ok': True, 'token': token, 'email_error': err}
+    raise HTTPException(status_code=500, detail='Email send failed')
 
-            msg = EmailMessage()
-            msg['Subject'] = 'Password reset for GatorGather'
-            msg['From'] = smtp_from
-            msg['To'] = to_address
-            msg.set_content(f"You requested a password reset. Use the following link to reset your password (expires in 1 hour):\n\n{reset_link}\n\nIf you didn't request this, ignore this message.")
-
-            try:
-                if smtp_port == 465:
-                    context = ssl.create_default_context()
-                    with smtplib.SMTP_SSL(smtp_host, smtp_port, context=context) as server:
-                        if smtp_user and smtp_pass:
-                            server.login(smtp_user, smtp_pass)
-                        server.send_message(msg)
-                else:
-                    with smtplib.SMTP(smtp_host, smtp_port) as server:
-                        if use_tls:
-                            server.starttls(context=ssl.create_default_context())
-                        if smtp_user and smtp_pass:
-                            server.login(smtp_user, smtp_pass)
-                        server.send_message(msg)
-                return True
-            except Exception as e:
-                # Log error and fall back to returning token in response for dev
-                print('Failed to send reset email:', e)
-                return False
-
-        sent = send_reset_email(email, token)
-        if sent:
-            return {'ok': True}
-
-    # DEV: return token so it can be used in testing (don't do this in production)
-    return {'ok': True, 'token': token}
+    
 
 
 class ResetIn(BaseModel):
@@ -240,14 +358,14 @@ def geocode(address: str):
 #@app.post('/login')
 
 # ---------------------- Event + Notification Models ----------------------
-class EventUpdate(BaseModel):
+#class EventUpdate(BaseModel):
     title: Optional[str] = None
     time: Optional[str] = None  # ISO string or display string
     address: Optional[str] = None
     description: Optional[str] = None
     is_private: Optional[bool] = None
 
-class EventOut(BaseModel):
+#class EventOut(BaseModel):
     id: str
     title: str
     host: Optional[str] = None
@@ -265,7 +383,7 @@ class NotificationOut(BaseModel):
     created_at: datetime
     read: bool = False
 
-def _serialize_event(doc: Dict) -> EventOut:
+'''def _serialize_event(doc: Dict) -> EventOut:
     return EventOut(
         id=str(doc['_id']),
         title=doc.get('title',''),
@@ -276,7 +394,7 @@ def _serialize_event(doc: Dict) -> EventOut:
         attendees=doc.get('attendees', []),
         volunteers=doc.get('volunteers', []),
         is_private=doc.get('is_private', False)
-    )
+    )'''
 
 def _create_notifications(db, event_doc: Dict, changed_fields: Dict):
     if not changed_fields:
@@ -316,7 +434,7 @@ def _create_notifications(db, event_doc: Dict, changed_fields: Dict):
         db['notifications'].insert_many(bulk_docs)
 
 # ---------------------- Event Endpoints ----------------------
-@app.get('/events/{event_id}', response_model=EventOut)
+'''@app.get('/events/{event_id}', response_model=EventOut)
 def get_event(event_id: str, request: Request):
     db = request.app.db
     try:
@@ -357,7 +475,7 @@ def update_event(event_id: str, payload: EventUpdate, request: Request, current_
         doc = db['events'].find_one({'_id': oid})
         _create_notifications(db, doc, changed)
 
-    return _serialize_event(doc)
+    return _serialize_event(doc)'''
 
 # ---------------------- Notification Endpoints ----------------------
 @app.get('/notifications', response_model=List[NotificationOut])
@@ -387,3 +505,13 @@ def mark_notification_read(notification_id: str, request: Request, current_user=
         raise HTTPException(status_code=404, detail='Notification not found')
     db['notifications'].update_one({'_id': oid}, {'$set': {'read': True}})
     return {'ok': True}
+
+
+# === Dev test endpoint (add this) ===
+class DevTestEmailIn(BaseModel):
+    to: EmailStr
+
+@app.post("/dev/test-email")
+def dev_test_email(payload: DevTestEmailIn):
+    ok, err = send_email(payload.to, "Test email", "This is a test from /dev/test-email")
+    return {"ok": ok, "error": err}
