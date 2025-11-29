@@ -13,7 +13,7 @@ from app.database import lifespan, get_db
 from app.users import get_by_email, create_user, authenticate_user
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Union
 from bson import ObjectId
 from datetime import datetime
 from fastapi import HTTPException
@@ -188,6 +188,85 @@ def upsert_event(event: EventUpsert, current_user = Depends(get_current_user)):
         doc['_id'] = str(doc['_id'])
     return EventOut.model_validate(doc)
 
+@app.get('/events/{event_id}')
+def get_event_details(event_id, role: str, current_user = Depends(get_current_user)):
+    """"Show the current event details of a specific event. Information will differ based on roles.
+        
+        event_id is the object id of the event that was passed in """
+    db = app.db
+    email = getattr(current_user, 'email', None)
+    event_oid = ObjectId(event_id)
+    if not email:
+        raise HTTPException(status_code=500, detail='Missing user email')
+    event = db['events'].find_one({'_id': event_oid})
+    if not event:
+        raise HTTPException(status_code=400, detail="Event does not exist in database")
+    if event:
+        event['_id'] = str(event['_id'])
+    total_delegates = db['event_volunteers'].find({'event_id': event_id, 'role': 'delegate'})
+    total_volunteers = db['event_volunteers'].find({'event_id': event_id, 'role': 'volunteer'})
+    volunteer_list = list(total_volunteers)
+    delegate_list = list(total_delegates)
+
+    for v in volunteer_list:
+        v['_id'] = str(v['_id'])
+    for d in delegate_list:
+        d['_id'] = str(d['_id'])
+    volunteers = [EventVolunteerOut(**v) for v in volunteer_list]
+    delegates = [EventVolunteerOut(**d) for d in delegate_list]
+    event['volunteers'] = volunteers
+
+    if role == 'organizer':
+        event['volunteers'] = volunteers
+        event['delegates'] = delegates
+        event['total_attendees'] = len(volunteers) + len(delegates)
+        return OrganizerEventDetails(**event)
+        
+    elif role == 'volunteer':
+        task = db['event_tasks'].find_one({'event_id': event_id, 'assigned_delegate': email})
+        if not task:
+            raise HTTPException(status_code=400, detail="No task assigned to current volunteer")
+        task['_id'] = str(task['_id'])
+
+        delegate_email = task.get('assigned_delegates')
+        delegate = db['event_volunteers'].find_one({'user_id': delegate_email}) if delegate_email else None
+        delegate_contact_info = delegate.get('user_id') if delegate else ''
+
+        organizer_id = event.get('created_by')
+        organizer = db['users'].find_one({'email': organizer_id})
+        organizer_contact_info = organizer.get('email') if organizer else ''
+
+        event['my_role'] = 'volunteer'
+        event['task_description'] = task.get('description', '')
+        event['task_location'] = Location(**task.get('location')) if task.get('location') else None
+        event['task_location_name'] = task.get('location_name', '')
+        event['delegate_contact_info'] = delegate_contact_info
+        event['organizer_contact_info'] = organizer_contact_info
+
+        return VolunteerEventDetails(**event)
+
+    elif role == 'delegate':
+        task = db['event_tasks'].find_one({'event_id': event_id, 'assigned_delegate': email})
+        if not task:
+            raise HTTPException(status_code=400, detail="No task assigned to current delegate")
+        task['_id'] = str(task['_id'])
+
+        organizer_id = event.get('created_by')
+        organizer = db['users'].find_one({'email': organizer_id})
+        organizer_contact_info = organizer.get('email') if organizer else ''
+
+        event['my_role'] = 'delegate'
+        event['task_description'] = task.get('description', '')
+        event['task_location'] = Location(**task.get('location')) if task.get('location') else None
+        event['task_location_name'] = task.get('location_name', '')
+        event['organizer_contact_info'] = organizer_contact_info
+        event['total_attendees'] = len(volunteers)
+
+        return DelegateEventDetails(**event)
+    else:
+        raise HTTPException(status_code=400, detail="Invalid role. Must be volunteer, organizer, or delegate")
+
+
 # -------- Event listing & joining endpoints --------
 @app.get('/events', response_model=List[EventOut])
 def list_events(role: str, current_user=Depends(get_current_user)):
@@ -253,11 +332,67 @@ def join_event(payload: JoinEventIn, current_user=Depends(get_current_user)):
             'user_id': email,
             'role': role,
             'joined_at': datetime.utcnow(),
-            'notes': ''
         })
     doc['_id'] = event_id_str
     return EventOut.model_validate(doc)
 
+# --------------- Task APIs ----------------
+@app.post('/events/{event_id}/tasks')
+def create_task(event_id: str, task: TaskCreate, current_user = Depends(get_current_user)):
+    db = app.db
+    task_dump = task.model_dump()
+    task_dump['event_id'] = event_id 
+    result = db['event_tasks'].insert_one(task_dump)
+    task_out = task_dump.copy()
+    task_out['id'] = str(result.inserted_id)
+    return TaskOut(**task_out)
+
+@app.patch("/events/{event_id}/tasks/{task_id}", response_model=TaskOut)
+def update_task(
+    event_id: str,
+    task_id: str,
+    task_in: TaskCreate,
+    current_user = Depends(get_current_user),
+):
+    """
+    Update an existing task/activity.
+    """
+    db = app.db
+    # Must convert string of object id to type object id
+    try:
+        oid = ObjectId(task_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid task_id")
+
+    task = db["event_tasks"].find_one({"_id": oid, "event_id": event_id})
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    update_data = task_in.model_dump(exclude_unset=True)
+    if update_data:
+        db["event_tasks"].update_one({"_id": oid}, {"$set": update_data})
+
+    updated_task = db["event_tasks"].find_one({"_id": oid})
+    updated_task["task_id"] = str(updated_task["_id"])
+    return TaskOut(**updated_task)
+
+# Api for adding a delegate to a task
+@app.patch("/events/{event_id}/tasks/{task_id}/assign", response_model = TaskOut)
+def assign_delegate(event_id: str, task_id: str, request: DelegateRequest, current_user = Depends(get_current_user)):
+    db = app.db
+    try:
+        oid = ObjectId(task_id)
+    except:
+        raise HTTPException(status_code=400, detail="Invalid task id")
+
+    task = db['event_tasks'].find_one({"_id":oid, 'event_id':event_id})
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    db['event_tasks'].update_one({'_id': oid}, {'$set': {'assigned_delegate': request.assigned_delegate}})
+    updated_task = db['event_tasks'].find_one({'_id': oid})
+    updated_task['task_id'] = str(updated_task['_id'])
+    return TaskOut(**updated_task)
 
 # ------------- Notification APIs -------------
 

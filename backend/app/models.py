@@ -111,10 +111,10 @@ class EventRoleOut(BaseModel):
     role: Literal["coordinator", "delegate"]
 
 # ------------------------------
-# Activities
+# Task
 # ------------------------------
 
-class ActivityBase(BaseModel):
+class TaskBase(BaseModel):
     name: str
     description: Optional[str] = None
     location: Location
@@ -122,22 +122,23 @@ class ActivityBase(BaseModel):
     start_time: datetime = Field(alias="start_time")
     end_time: datetime = Field(alias="end_time")
     max_volunteers: Optional[int] = Field(default=None, alias="max_volunteers")
+    assigned_delegates: str
 
-class ActivityInDB(ActivityBase):
+class TaskInDB(TaskBase):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    id: Optional[ObjectId] = Field(default=None, alias="_id")
+    id: Optional[ObjectId] = Field(default=None)
     event_id: str = Field(alias="event_id")
     created_by: str = Field(alias="created_by")  # email string
     created_at: Optional[datetime] = Field(default=None, alias="created_at")
     updated_at: Optional[datetime] = Field(default=None, alias="updated_at")
 
-class ActivityOut(ActivityBase):
-    id: Optional[str] = Field(default=None, alias="_id")
+class TaskCreate(TaskBase):
+    pass # This is just going to be used for reading in the data from the frontend
+
+class TaskOut(TaskBase):
+    id: Optional[str] = Field(default=None)
     event_id: str = Field(alias="event_id")
-    created_by: Optional[str] = Field(default=None, alias="created_by")
-    created_at: Optional[datetime] = Field(default=None, alias="created_at")
-    updated_at: Optional[datetime] = Field(default=None, alias="updated_at")
 
 # ------------------------------
 # Event Volunteers
@@ -151,15 +152,13 @@ class EventVolunteerInDB(BaseModel):
     user_id: str = Field(alias="user_id")  # store email string
     role: Literal["delegate", "volunteer"]
     joined_at: datetime = Field(alias="joined_at")
-    notes: Optional[str] = ""
 
 class EventVolunteerOut(BaseModel):
-    id: Optional[str] = Field(default=None, alias="_id")
+    id: str = Field(alias="_id")
     event_id: str = Field(alias="event_id")
     user_id: str = Field(alias="user_id")
     role: Literal["delegate", "volunteer"]
     joined_at: datetime = Field(alias="joined_at")
-    notes: Optional[str] = ""
 
 # ------------------------------
 # Activity Assignments
@@ -182,3 +181,55 @@ class ActivityAssignmentOut(BaseModel):
     user_id: str = Field(alias="user_id")
     assigned_by: str = Field(alias="assigned_by")
     assigned_at: datetime = Field(alias="assigned_at")
+
+
+# NOT AI GENERATED
+class OrganizerEventDetails(BaseModel):
+    name: str
+    description: Optional[str] = None
+    location: Location
+    location_name: Optional[str] = Field(default=None, alias="location_name")
+    start_date: datetime = Field(alias="start_date")
+    end_date: datetime = Field(alias="end_date")
+    delegate_join_code: str = Field(alias="delegate_join_code")
+    volunteer_join_code: str = Field(alias="volunteer_join_code")
+    total_attendees: Optional[int] # We will use this for computing total attendees
+    volunteers: Optional[List] # This will return all of the volunteers 
+    delegates: Optional[List] # This will return all of the delegates
+
+class VolunteerEventDetails(BaseModel):
+    name: str
+    description: Optional[str] = None
+    location: Location
+    location_name: Optional[str] = Field(default=None, alias="location_name")
+    start_date: datetime = Field(alias="start_date")
+    end_date: datetime = Field(alias="end_date")
+    delegate_join_code: str = Field(alias="delegate_join_code")
+    delegate_contact_info: str
+    organizer_contact_info: str
+    my_role: str
+    task_description: str 
+    task_location: Location
+    task_location_name: str
+    #checkin_status: str #add if we have time
+
+class DelegateEventDetails(BaseModel):
+    name: str
+    description: Optional[str] = None
+    location: Location
+    location_name: Optional[str] = Field(default=None, alias="location_name")
+    start_date: datetime = Field(alias="start_date")
+    end_date: datetime = Field(alias="end_date")
+    volunteer_join_code: str = Field(alias="volunteer_join_code")
+    total_attendees: Optional[int] # We will use this for computing total attendees just for this delegate's task
+    volunteers: Optional[List] # This will return all of the volunteers 
+    organizer_contact_info: str
+    my_role: str
+    task_description: str
+    task_location: Location 
+    task_location_name: str 
+    #checkin_status: str  # add if we have time
+
+class DelegateRequest(BaseModel):
+    assigned_delegate: str
+    
