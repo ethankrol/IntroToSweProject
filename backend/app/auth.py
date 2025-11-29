@@ -4,6 +4,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from .config import settings
 from .database import get_db
+from .models import UserInDB
 
 SECRET_KEY = settings.SECRET_KEY
 ALGORITHM = settings.ALGORITHM
@@ -36,5 +37,5 @@ def get_current_user(token: str = Depends(oauth2_scheme), db = Depends(get_db)):
     user = db['users'].find_one({'email': email})
     if not user:
         raise HTTPException(status_code=404, detail='User not found')
-    # Return raw DB document; callers can map to Pydantic models as needed.
-    return user
+    # Validate via Pydantic so Mongo `_id` alias maps to `id`.
+    return UserInDB.model_validate(user)

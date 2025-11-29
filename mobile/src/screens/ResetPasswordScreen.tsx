@@ -1,41 +1,35 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, Button, StyleSheet, Alert } from 'react-native';
+import { API_BASE_URL } from '../config';
 
 export default function ResetPasswordScreen({ navigation }: any) {
   const [email, setEmail] = useState('');
   const [sending, setSending] = useState(false);
 
   const onRequestReset = async () => {
-    if (!email) {
-      Alert.alert('Please enter an email');
-      return;
-    }
+  if (!email) {
+    Alert.alert('Please enter an email');
+    return;
+  }
 
-    try {
-      setSending(true);
-      // Call backend to request password reset
-      const response = await fetch('http://localhost:8000/request-reset', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email })
-      });
+  // Navigate immediately to SetPasswordScreen (without token)
+  navigation.navigate('SetPasswordScreen');
 
-      if (!response.ok) {
-        const error = await response.json();
-        Alert.alert('Error', error.detail || 'Unable to send reset email');
-        return;
-      }
-
-      Alert.alert('Success', 'A password reset email has been sent to your email address.', [
-        { text: 'OK', onPress: () => navigation.goBack() }
-      ]);
-    } catch (err) {
-      console.error(err);
-      Alert.alert('Error', 'Unable to connect to server. Please try again later.');
-    } finally {
-      setSending(false);
-    }
-  };
+  // Optionally, still send the request in the background
+  try {
+    setSending(true);
+    await fetch(`${API_BASE_URL}/request-reset`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    });
+    // You can show a message or handle errors if needed
+  } catch (err) {
+    // Handle error if needed
+  } finally {
+    setSending(false);
+  }
+};
 
   return (
     <View style={styles.container}>

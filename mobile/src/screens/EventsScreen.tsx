@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, FlatList, StyleSheet, Button, Alert, TouchableOpacity } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 
@@ -63,6 +63,9 @@ export default function EventsScreen() {
   // @ts-ignore
   const initialRole: 'admin' | 'volunteer' = route?.params?.role ?? 'volunteer';
 
+
+  // Need to add a tab here for switching between three different kinds of events (organizer, delegate, volunteer)
+  const [tab, setTab] = useState<'organizer' | 'delegate' | 'volunteer'>('volunteer'); // Create three tabs, with one (volunteer tab) being the default
   const [role, setRole] = useState<'admin' | 'volunteer'>(initialRole);
   const [events, setEvents] = useState<Event[]>(MOCK_EVENTS);
 
@@ -71,6 +74,11 @@ export default function EventsScreen() {
     // @ts-ignore
     navigation.navigate('EditEvent', { event } as never);
   };
+
+  // We need to monitor the tab status to load different events depending on which one was changed to
+  useEffect(() => {
+    console.log("Fetching user event data for:", tab);
+  }, [tab]);
 
   const toggleRole = () => setRole((r) => (r === 'admin' ? 'volunteer' : 'admin'));
 
@@ -105,12 +113,14 @@ export default function EventsScreen() {
       <Text style={styles.location}>{item.location}</Text>
       {item.description ? <Text style={styles.description}>{item.description}</Text> : null}
       <View style={styles.actions}>
-        {role === 'admin' ? (
+        {tab === 'organizer' ? (
           <TouchableOpacity style={styles.editButton} onPress={() => onEdit(item)}>
             <Text style={styles.editText}>Edit</Text>
           </TouchableOpacity>
         ) : (
-          <Button title="Join" onPress={() => onJoin(item)} />
+          <TouchableOpacity style={styles.joinButton} onPress={() => onJoin(item)}>
+            <Text style={styles.joinText}>Join</Text>
+          </TouchableOpacity>
         )}
         {/* Details button - visible to all roles */}
         {/* @ts-ignore - navigation typing is generic here, passing params dynamically */}
@@ -142,11 +152,28 @@ export default function EventsScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginBottom: 12 }}>
+
+      <View style={styles.navbar}>
+        {['organizer', 'delegate', 'volunteer'].map(role => (
+          <TouchableOpacity
+          key = {role}
+          style={[
+            styles.navItem,
+            tab === role && styles.navItemActive
+          ]}
+          onPress={() => setTab(role as any)}
+          >
+            <Text style={[styles.navText, tab === role && styles.navTextActive]}>
+              {role.toUpperCase()}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      {/*<View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginBottom: 12 }}>
         <TouchableOpacity onPress={toggleRole} style={{ marginRight: 8 }}>
           <Text style={{ color: '#2563eb' }}>Switch to {role === 'admin' ? 'volunteer' : 'admin'}</Text>
         </TouchableOpacity>
-      </View>
+      </View>*/}
       <FlatList
         data={events}
         keyExtractor={(i) => i.id}
@@ -162,6 +189,30 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#ecfdf5',
     padding: 12
+  },
+  navbar: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingVertical: 12,
+    marginBottom: 12,
+    borderBottomWidth: 2,
+    borderColor: '#a7f3d0'
+  },
+  navItem: {
+    paddingVertical: 6,
+    paddingHorizontal: 10
+  },
+  navItemActive: {
+    borderBottomWidth: 3,
+    borderColor: '#059669'
+  },
+  navText: {
+    fontSize: 15,
+    color: '#444'
+  },
+  navTextActive: {
+    fontWeight: '700',
+    color: '#059669'
   },
   header: {
     fontSize: 22,
@@ -215,6 +266,16 @@ const styles = StyleSheet.create({
     fontWeight: '700'
   }
   ,
+  joinButton: {
+  paddingHorizontal: 12,
+  paddingVertical: 8,
+  backgroundColor: '#2563eb',
+  borderRadius: 6,
+},
+joinText: {
+  color: '#fff',
+  fontWeight: '700'
+},
   cancelButton: {
     paddingHorizontal: 12,
     paddingVertical: 8,
