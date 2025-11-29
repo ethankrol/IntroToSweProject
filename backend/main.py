@@ -60,6 +60,15 @@ def _generate_unique_join_code(db, length: int = 6, max_attempts: int = 100, exc
             return code
     raise HTTPException(status_code=500, detail='Failed to generate a unique join code')
 
+def _generate_unique_task_code(db, length: int = 6, max_attempts: int = 100) -> str:
+    import secrets, string
+    alphabet = string.ascii_uppercase + string.digits
+    for _ in range(max_attempts):
+        code = ''.join(secrets.choice(alphabet) for _ in range(length))
+        if db['event_tasks'].find_one({'task_join_code': code}) is None:
+            return code
+    raise HTTPException(status_code=500, detail="Failed to generate unique task code")
+
 @app.post('/token', response_model=Token)
 def login_for_access_token(
     response: Response,
@@ -132,137 +141,95 @@ class EventUpsert(EventBase):
     volunteer_join_code: Optional[str] = Field(default=None, alias='volunteer_join_code')
 
 @app.patch('/event', response_model=EventOut)
-def upsert_event(event: EventUpsert, current_user = Depends(get_current_user)):
-    """
-    Create a new event when `_id` is not provided; otherwise update the existing event.
-    """
+def upsert_event(event: EventUpsert, current_user=Depends(get_current_user)):
     db = app.db
     payload = event.model_dump(by_alias=True, exclude_unset=True)
     now = datetime.utcnow()
 
     doc: Dict = {}
     if payload.get('_id'):
-        # Update existing
         try:
             oid = ObjectId(payload['_id'])
         except Exception:
             raise HTTPException(status_code=400, detail='Invalid event id')
         payload.pop('_id', None)
-        # If client attempts to change codes, enforce uniqueness
-        if 'delegate_join_code' in payload:
-            code = payload['delegate_join_code']
-            if code and _code_exists(db, code, exclude_id=oid):
-                raise HTTPException(status_code=409, detail='delegate_join_code already in use')
-        if 'volunteer_join_code' in payload:
-            code = payload['volunteer_join_code']
-            if code and _code_exists(db, code, exclude_id=oid):
-                raise HTTPException(status_code=409, detail='volunteer_join_code already in use')
         payload['updated_at'] = now
         res = db['events'].update_one({'_id': oid}, {'$set': payload})
         if res.matched_count == 0:
             raise HTTPException(status_code=404, detail='Event not found')
         doc = db['events'].find_one({'_id': oid}) or {}
     else:
-        # Create new
         payload['created_by'] = getattr(current_user, 'email', None) or (
             current_user.get('email') if isinstance(current_user, dict) else None
         )
         if not payload['created_by']:
             raise HTTPException(status_code=500, detail='Unable to determine creator email')
-        # Generate join codes if not provided
-        if not payload.get('delegate_join_code'):
-            payload['delegate_join_code'] = _generate_unique_join_code(db)
-        if not payload.get('volunteer_join_code'):
-            # Ensure volunteer code differs from delegate code too
-            code = _generate_unique_join_code(db)
-            while code == payload['delegate_join_code']:
-                code = _generate_unique_join_code(db)
-            payload['volunteer_join_code'] = code
+        payload['delegate_join_code'] = _generate_unique_join_code(db)
         payload['created_at'] = now
         payload['updated_at'] = now
         result = db['events'].insert_one(payload)
         doc = db['events'].find_one({'_id': result.inserted_id}) or {}
 
-    # Coerce ObjectId to string for response model
     if doc.get('_id'):
         doc['_id'] = str(doc['_id'])
     return EventOut.model_validate(doc)
 
-@app.get('/events/{event_id}')
-def get_event_details(event_id, role: str, current_user = Depends(get_current_user)):
-    """"Show the current event details of a specific event. Information will differ based on roles.
-        
-        event_id is the object id of the event that was passed in """
+
+
+
+@app.get('/events/{event_id}', response_model=EventOut)
+def get_event_details(event_id: str, role: str, current_user=Depends(get_current_user)):
     db = app.db
     email = getattr(current_user, 'email', None)
-    event_oid = ObjectId(event_id)
     if not email:
         raise HTTPException(status_code=500, detail='Missing user email')
+    try:
+        event_oid = ObjectId(event_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail='Invalid event id')
+
     event = db['events'].find_one({'_id': event_oid})
     if not event:
-        raise HTTPException(status_code=400, detail="Event does not exist in database")
-    if event:
-        event['_id'] = str(event['_id'])
-    total_delegates = db['event_volunteers'].find({'event_id': event_id, 'role': 'delegate'})
-    total_volunteers = db['event_volunteers'].find({'event_id': event_id, 'role': 'volunteer'})
-    volunteer_list = list(total_volunteers)
-    delegate_list = list(total_delegates)
+        raise HTTPException(status_code=404, detail="Event does not exist in database")
+    event['_id'] = str(event['_id'])
 
-    for v in volunteer_list:
-        v['_id'] = str(v['_id'])
-    for d in delegate_list:
-        d['_id'] = str(d['_id'])
-    volunteers = [EventVolunteerOut(**v) for v in volunteer_list]
-    delegates = [EventVolunteerOut(**d) for d in delegate_list]
-    event['volunteers'] = volunteers
+    task_cursor = db['event_tasks'].find({'event_id': event_id})
+    tasks = []
+    for t in task_cursor:
+        t['_id'] = str(t['_id'])
+        tasks.append({
+            'id': t['_id'],
+            'name': t.get('name', ''),
+            'description': t.get('description', ''),
+            'task_join_code': t.get('task_join_code', ''),
+            'location_name': t.get('location_name', ''),
+            'assigned_delegate': t.get('assigned_delegate', None),
+        })
+    event['tasks'] = tasks
 
     if role == 'organizer':
-        event['volunteers'] = volunteers
-        event['delegates'] = delegates
-        event['total_attendees'] = len(volunteers) + len(delegates)
+        total_delegates = list(db['event_volunteers'].find({'event_id': event_id, 'role': 'delegate'}))
+        total_volunteers = list(db['event_volunteers'].find({'event_id': event_id, 'role': 'volunteer'}))
+        for v in total_volunteers:
+            v['_id'] = str(v['_id'])
+        for d in total_delegates:
+            d['_id'] = str(d['_id'])
+        event['volunteers'] = [EventVolunteerOut(**v) for v in total_volunteers]
+        event['delegates'] = [EventVolunteerOut(**d) for d in total_delegates]
+        event['total_attendees'] = len(total_volunteers) + len(total_delegates)
         return OrganizerEventDetails(**event)
-        
-    elif role == 'volunteer':
-        task = db['event_tasks'].find_one({'event_id': event_id, 'assigned_delegate': email})
-        if not task:
-            raise HTTPException(status_code=400, detail="No task assigned to current volunteer")
-        task['_id'] = str(task['_id'])
-
-        delegate_email = task.get('assigned_delegates')
-        delegate = db['event_volunteers'].find_one({'user_id': delegate_email}) if delegate_email else None
-        delegate_contact_info = delegate.get('user_id') if delegate else ''
-
-        organizer_id = event.get('created_by')
-        organizer = db['users'].find_one({'email': organizer_id})
-        organizer_contact_info = organizer.get('email') if organizer else ''
-
-        event['my_role'] = 'volunteer'
-        event['task_description'] = task.get('description', '')
-        event['task_location'] = Location(**task.get('location')) if task.get('location') else None
-        event['task_location_name'] = task.get('location_name', '')
-        event['delegate_contact_info'] = delegate_contact_info
-        event['organizer_contact_info'] = organizer_contact_info
-
-        return VolunteerEventDetails(**event)
-
-    elif role == 'delegate':
-        task = db['event_tasks'].find_one({'event_id': event_id, 'assigned_delegate': email})
-        if not task:
-            raise HTTPException(status_code=400, detail="No task assigned to current delegate")
-        task['_id'] = str(task['_id'])
-
-        organizer_id = event.get('created_by')
-        organizer = db['users'].find_one({'email': organizer_id})
-        organizer_contact_info = organizer.get('email') if organizer else ''
-
-        event['my_role'] = 'delegate'
-        event['task_description'] = task.get('description', '')
-        event['task_location'] = Location(**task.get('location')) if task.get('location') else None
-        event['task_location_name'] = task.get('location_name', '')
-        event['organizer_contact_info'] = organizer_contact_info
-        event['total_attendees'] = len(volunteers)
-
-        return DelegateEventDetails(**event)
+    elif role in ('volunteer', 'delegate'):
+        user_task = db['event_tasks'].find_one({'event_id': event_id, 'assigned_delegate': email})
+        if user_task:
+            user_task['_id'] = str(user_task['_id'])
+            event['my_task'] = {
+                'id': user_task['_id'],
+                'name': user_task.get('name', ''),
+                'description': user_task.get('description', ''),
+                'task_join_code': user_task.get('task_join_code', ''),
+                'location_name': user_task.get('location_name', ''),
+            }
+        return EventOut.model_validate(event)
     else:
         raise HTTPException(status_code=400, detail="Invalid role. Must be volunteer, organizer, or delegate")
 
@@ -303,62 +270,58 @@ def list_events(role: str, current_user=Depends(get_current_user)):
 class JoinEventIn(BaseModel):
     code: str
 
-@app.post('/event/join', response_model=EventOut)
-@app.post('/event/join', response_model=EventOut)
-def join_event(payload: JoinEventIn, current_user=Depends(get_current_user)):
+@app.post("/event/join/{delegate_code}", response_model=EventOut)
+def join_event(delegate_code: str, current_user=Depends(get_current_user)):
     db = app.db
-    code = payload.code.strip().upper()
+    code = delegate_code.strip().upper()
     if len(code) != 6:
-        raise HTTPException(status_code=400, detail='Code must be 6 characters')
-    doc = db['events'].find_one({'delegate_join_code': code})
-    role = 'delegate'
-    if not doc:
-        doc = db['events'].find_one({'volunteer_join_code': code})
-        role = 'volunteer'
-    if not doc:
-        raise HTTPException(status_code=404, detail='Invalid join code')
-    email = getattr(current_user, 'email', None) or (current_user.get('email') if isinstance(current_user, dict) else None)
+        raise HTTPException(status_code=400, detail="Code must be 6 characters")
+    event_doc = db["events"].find_one({"delegate_join_code": code})
+    if not event_doc:
+        raise HTTPException(status_code=404, detail="Invalid delegate join code")
+    email = getattr(current_user, "email", None)
     if not email:
-        raise HTTPException(status_code=500, detail='Missing user email')
-
-    event_id_str = str(doc['_id'])
-    existing = db['event_volunteers'].find_one({'event_id': event_id_str, 'user_id': email})
+        raise HTTPException(status_code=500, detail="Missing user email")
+    event_id_str = str(event_doc["_id"])
+    existing = db["event_volunteers"].find_one({"event_id": event_id_str, "user_id": email})
     if existing:
-        if existing.get('role') != role:
-            db['event_volunteers'].update_one({'_id': existing['_id']}, {'$set': {'role': role}})
+        if existing.get("role") != "delegate":
+            db["event_volunteers"].update_one({"_id": existing["_id"]}, {"$set": {"role": "delegate"}})
     else:
-        db['event_volunteers'].insert_one({
-            'event_id': event_id_str,
-            'user_id': email,
-            'role': role,
-            'joined_at': datetime.utcnow(),
+        db["event_volunteers"].insert_one({
+            "event_id": event_id_str,
+            "user_id": email,
+            "role": "delegate",
+            "joined_at": datetime.utcnow(),
         })
-
-    if role == 'volunteer':
-        delegate_task = db['event_tasks'].find_one({'event_id': event_id_str, 'assigned_delegates': {'$exists': True}})
-        if delegate_task:
-            db['task_assignments'].insert_one({
-                'event_id': event_id_str,
-                'activity_id': str(delegate_task['_id']),
-                'user_id': email,
-                'assigned_by': delegate_task.get('assigned_delegates'),
-                'assigned_at': datetime.utcnow()
-            })
-
-    doc['_id'] = event_id_str
-    return EventOut.model_validate(doc)
+    event_doc["_id"] = event_id_str
+    return EventOut.model_validate(event_doc)
 
 
 # --------------- Task APIs ----------------
-@app.post('/events/{event_id}/tasks')
-def create_task(event_id: str, task: TaskCreate, current_user = Depends(get_current_user)):
+@app.post('/events/{event_id}/tasks', response_model=TaskOut)
+def create_task(event_id: str, task: TaskCreate, current_user=Depends(get_current_user)):
     db = app.db
     task_dump = task.model_dump()
-    task_dump['event_id'] = event_id 
+    task_dump['event_id'] = event_id
+    task_dump['created_by'] = getattr(current_user, 'email', None)
+    task_dump['task_join_code'] = _generate_unique_task_code(db)  # unique code per task
+    task_dump['created_at'] = datetime.utcnow()
+    task_dump['updated_at'] = datetime.utcnow()
+
     result = db['event_tasks'].insert_one(task_dump)
-    task_out = task_dump.copy()
-    task_out['id'] = str(result.inserted_id)
-    return TaskOut(**task_out)
+    task_dump['id'] = str(result.inserted_id)
+    return TaskOut(**task_dump)
+
+
+@app.get('/events/{event_id}/tasks', response_model=List[TaskOut])
+def get_tasks_for_event(event_id: str):
+    db = app.db
+    tasks = list(db['event_tasks'].find({'event_id': event_id}))
+    for t in tasks:
+        t['id'] = str(t['_id'])
+    return [TaskOut(**t) for t in tasks]
+
 
 @app.patch("/events/{event_id}/tasks/{task_id}", response_model=TaskOut)
 def update_task(
@@ -406,6 +369,57 @@ def assign_delegate(event_id: str, task_id: str, request: DelegateRequest, curre
     updated_task = db['event_tasks'].find_one({'_id': oid})
     updated_task['task_id'] = str(updated_task['_id'])
     return TaskOut(**updated_task)
+
+@app.post("/tasks/join/{task_code}", response_model=TaskOut)
+def join_task(task_code: str, current_user=Depends(get_current_user)):
+    db = app.db
+    code = task_code.strip().upper()
+    email = getattr(current_user, "email", None)
+    if not email:
+        raise HTTPException(status_code=500, detail="Missing user email")
+
+    task = db["event_tasks"].find_one({"task_join_code": code})
+    if not task:
+        raise HTTPException(status_code=404, detail="Invalid task join code")
+
+    task_id_str = str(task["_id"])
+    event_id = task["event_id"]
+
+    existing_event_member = db["event_volunteers"].find_one({
+        "event_id": event_id,
+        "user_id": email
+    })
+
+    if not existing_event_member:
+        db["event_volunteers"].insert_one({
+            "event_id": event_id,
+            "user_id": email,
+            "role": "volunteer",
+            "joined_at": datetime.utcnow(),
+        })
+    else:
+        if existing_event_member.get("role") != "volunteer":
+            db["event_volunteers"].update_one(
+                {"_id": existing_event_member["_id"]},
+                {"$set": {"role": "volunteer"}}
+            )
+
+    existing_assignment = db["task_assignments"].find_one({
+        "activity_id": task_id_str,
+        "user_id": email
+    })
+
+    if not existing_assignment:
+        db["task_assignments"].insert_one({
+            "event_id": event_id,
+            "activity_id": task_id_str,
+            "user_id": email,
+            "assigned_by": task.get("assigned_delegate", ""),
+            "assigned_at": datetime.utcnow()
+        })
+
+    task["id"] = task_id_str
+    return TaskOut(**task)
 
 # ------------- Notification APIs -------------
 

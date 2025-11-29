@@ -76,7 +76,6 @@ class EventBase(BaseModel):
     start_date: datetime = Field(alias="start_date")
     end_date: datetime = Field(alias="end_date")
     delegate_join_code: str = Field(alias="delegate_join_code")
-    volunteer_join_code: str = Field(alias="volunteer_join_code")
 
 class EventInDB(EventBase):
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -122,7 +121,8 @@ class TaskBase(BaseModel):
     start_time: datetime = Field(alias="start_time")
     end_time: datetime = Field(alias="end_time")
     max_volunteers: Optional[int] = Field(default=None, alias="max_volunteers")
-    assigned_delegates: str
+    assigned_delegate: str
+    task_join_code: Optional[str] = None # backend will generate the code
 
 class TaskInDB(TaskBase):
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -192,7 +192,6 @@ class OrganizerEventDetails(BaseModel):
     start_date: datetime = Field(alias="start_date")
     end_date: datetime = Field(alias="end_date")
     delegate_join_code: str = Field(alias="delegate_join_code")
-    volunteer_join_code: str = Field(alias="volunteer_join_code")
     total_attendees: Optional[int] # We will use this for computing total attendees
     volunteers: Optional[List] # This will return all of the volunteers 
     delegates: Optional[List] # This will return all of the delegates
@@ -232,4 +231,7 @@ class DelegateEventDetails(BaseModel):
 
 class DelegateRequest(BaseModel):
     assigned_delegate: str
+
+class JoinTaskIn(BaseModel):
+    task_code: str
     

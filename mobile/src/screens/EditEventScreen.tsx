@@ -60,8 +60,6 @@ export default function EditEventScreen({ route, navigation }: any) {
           location_name: '',
           start_date: undefined,
           end_date: undefined,
-          delegate_join_code: '',
-          volunteer_join_code: '',
         };
       }
       const coords: [number | undefined, number | undefined] = incoming.location?.coordinates ?? [undefined, undefined];
@@ -73,8 +71,6 @@ export default function EditEventScreen({ route, navigation }: any) {
         location_name: incoming.location_name ?? '',
         start_date: incoming.start_date,
         end_date: incoming.end_date,
-        delegate_join_code: incoming.delegate_join_code ?? '',
-        volunteer_join_code: incoming.volunteer_join_code ?? '',
       };
     }, [incoming]);
 
@@ -160,9 +156,6 @@ export default function EditEventScreen({ route, navigation }: any) {
         location_name: fields.location_name || undefined,
         start_date: start.toISOString(),
         end_date: end.toISOString(),
-        // Backend generates the unique codes for us, we should display this in the "event view" screen as well.
-        ...(fields.delegate_join_code ? { delegate_join_code: fields.delegate_join_code } : {}),
-        ...(fields.volunteer_join_code ? { volunteer_join_code: fields.volunteer_join_code } : {}),
       };
 
       const saved: EventResponse = await saveEvent(payload);
@@ -220,15 +213,15 @@ export default function EditEventScreen({ route, navigation }: any) {
       </View>
 
       <Text style={styles.label}>Location Name</Text>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', width: '95%', justifyContent: 'flex-end', gap: 8 }}>
       <TextInput
-        style={styles.input}
+        style={[styles.input, {flex: 1, marginRight: 8}]}
         value={fields.location_name || ''}
         onChangeText={t => setFields(f => ({ ...f, location_name: t }))}
         placeholder="Location name (optional)"
       />
         <TouchableOpacity
-          style={[styles.dateBox, { paddingVertical: 10, marginTop: 6 }]}
+          style={[styles.dateBox, { width: 140, justifyContent: 'center', alignItems: 'center' }]}
           onPress={() => {
             const coords = fields.location?.coordinates || [undefined, undefined];
             const lng = coords[0];
@@ -282,21 +275,6 @@ export default function EditEventScreen({ route, navigation }: any) {
         placeholder="Description"
         multiline
         numberOfLines={4}
-      />
-
-      <Text style={styles.label}>Delegate Join Code</Text>
-      <TextInput
-        style={styles.input}
-        value={fields.delegate_join_code}
-        onChangeText={t => setFields(f => ({ ...f, delegate_join_code: t }))}
-        placeholder="Delegate join code"
-      />
-      <Text style={styles.label}>Volunteer Join Code</Text>
-      <TextInput
-        style={styles.input}
-        value={fields.volunteer_join_code}
-        onChangeText={t => setFields(f => ({ ...f, volunteer_join_code: t }))}
-        placeholder="Volunteer join code"
       />
 
       <View style={styles.buttonRow}>
