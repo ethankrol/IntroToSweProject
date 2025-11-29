@@ -304,8 +304,8 @@ class JoinEventIn(BaseModel):
     code: str
 
 @app.post('/event/join', response_model=EventOut)
+@app.post('/event/join', response_model=EventOut)
 def join_event(payload: JoinEventIn, current_user=Depends(get_current_user)):
-    """Join an event using either delegate or volunteer join code."""
     db = app.db
     code = payload.code.strip().upper()
     if len(code) != 6:
@@ -333,8 +333,21 @@ def join_event(payload: JoinEventIn, current_user=Depends(get_current_user)):
             'role': role,
             'joined_at': datetime.utcnow(),
         })
+
+    if role == 'volunteer':
+        delegate_task = db['event_tasks'].find_one({'event_id': event_id_str, 'assigned_delegates': {'$exists': True}})
+        if delegate_task:
+            db['task_assignments'].insert_one({
+                'event_id': event_id_str,
+                'activity_id': str(delegate_task['_id']),
+                'user_id': email,
+                'assigned_by': delegate_task.get('assigned_delegates'),
+                'assigned_at': datetime.utcnow()
+            })
+
     doc['_id'] = event_id_str
     return EventOut.model_validate(doc)
+
 
 # --------------- Task APIs ----------------
 @app.post('/events/{event_id}/tasks')
