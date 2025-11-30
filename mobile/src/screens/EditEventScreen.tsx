@@ -11,6 +11,9 @@ import {
   TouchableOpacity,
   LayoutAnimation,
   UIManager,
+  KeyboardAvoidingView,
+  TouchableWithoutFeedback,
+  Keyboard,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { saveEvent } from '../services/events';
@@ -169,125 +172,140 @@ export default function EditEventScreen({ route, navigation }: any) {
   const onCancel = () => navigation.goBack?.();
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.header}>{fields._id ? 'Edit Event' : 'Create Event'}</Text>
-
-      <Text style={styles.label}>Name</Text>
-      <TextInput
-        style={styles.input}
-        value={fields.name}
-        onChangeText={t => setFields(f => ({ ...f, name: t }))}
-        placeholder="Event name"
-      />
-
-      <Text style={styles.label}>Date</Text>
-      <TouchableOpacity style={styles.dateBox} onPress={toggleDatePicker}>
-        <Text style={styles.dateText}>{formatDateLocal(date)}</Text>
-      </TouchableOpacity>
-      {showDatePicker && (
-        <DateTimePicker value={date} mode="date" display="spinner" onChange={onChangeDate} />
-      )}
-
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 16 }}>
-        <View style={{ width: '48%' }}>
-          <Text style={styles.label}>Start Time</Text>
-          <TouchableOpacity style={styles.dateBox} onPress={toggleStartPicker}>
-            <Text style={styles.dateText}>{formatTime(startTime)}</Text>
-          </TouchableOpacity>
-        </View>
-        <View style={{ width: '48%' }}>
-          <Text style={styles.label}>End Time</Text>
-          <TouchableOpacity style={styles.dateBox} onPress={toggleEndPicker}>
-            <Text style={styles.dateText}>{formatTime(endTime)}</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      <View>
-        {showStartPicker && (
-          <DateTimePicker value={startTime} mode="time" display="spinner" onChange={onChangeStart} />
-        )}
-        {showEndPicker && (
-          <DateTimePicker value={endTime} mode="time" display="spinner" onChange={onChangeEnd} />
-        )}
-      </View>
-
-      <Text style={styles.label}>Location Name</Text>
-      <View style={{ flexDirection: 'row', alignItems: 'center', width: '95%', justifyContent: 'flex-end', gap: 8 }}>
-      <TextInput
-        style={[styles.input, {flex: 1, marginRight: 8}]}
-        value={fields.location_name || ''}
-        onChangeText={t => setFields(f => ({ ...f, location_name: t }))}
-        placeholder="Location name (optional)"
-      />
-        <TouchableOpacity
-          style={[styles.dateBox, { width: 140, justifyContent: 'center', alignItems: 'center' }]}
-          onPress={() => {
-            const coords = fields.location?.coordinates || [undefined, undefined];
-            const lng = coords[0];
-            const lat = coords[1];
-            navigation.navigate?.('LocationPicker', {
-              address: fields.location_name || '',
-              lat: typeof lat === 'number' ? lat : undefined,
-              lng: typeof lng === 'number' ? lng : undefined,
-              onPick: (loc: { lat: number; lng: number; address: string }) => {
-                setFields(f => ({
-                  ...f,
-                  location_name: loc.address,
-                  location: { type: 'Point', coordinates: [loc.lng, loc.lat] },
-                }));
-              },
-            });
-          }}
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={90}
+    >
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+        <ScrollView
+          contentContainerStyle={styles.container}
+          keyboardShouldPersistTaps="handled"
         >
-          <Text style={styles.dateText}>Pick Location</Text>
-        </TouchableOpacity>
-      </View>
+          <Text style={styles.header}>{fields._id ? 'Edit Event' : 'Create Event'}</Text>
 
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 16 }}>
-        <View style={{ width: '48%' }}>
-          <Text style={styles.label}>Longitude</Text>
+          <Text style={styles.label}>Name</Text>
           <TextInput
             style={styles.input}
-            value={fields.location.coordinates[0] != null ? String(fields.location.coordinates[0]) : ''}
-            onChangeText={t => setFields(f => ({ ...f, location: { ...f.location, coordinates: [t ? Number(t) : undefined, f.location.coordinates[1]] } }))}
-            placeholder="e.g. -73.9857"
-            keyboardType="decimal-pad"
+            value={fields.name}
+            onChangeText={t => setFields(f => ({ ...f, name: t }))}
+            placeholder="Event name"
+            returnKeyType="done"
           />
-        </View>
-        <View style={{ width: '48%' }}>
-          <Text style={styles.label}>Latitude</Text>
+
+          <Text style={styles.label}>Date</Text>
+          <TouchableOpacity style={styles.dateBox} onPress={toggleDatePicker}>
+            <Text style={styles.dateText}>{formatDateLocal(date)}</Text>
+          </TouchableOpacity>
+          {showDatePicker && (
+            <DateTimePicker value={date} mode="date" display="spinner" onChange={onChangeDate} />
+          )}
+
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 16 }}>
+            <View style={{ width: '48%' }}>
+              <Text style={styles.label}>Start Time</Text>
+              <TouchableOpacity style={styles.dateBox} onPress={toggleStartPicker}>
+                <Text style={styles.dateText}>{formatTime(startTime)}</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={{ width: '48%' }}>
+              <Text style={styles.label}>End Time</Text>
+              <TouchableOpacity style={styles.dateBox} onPress={toggleEndPicker}>
+                <Text style={styles.dateText}>{formatTime(endTime)}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <View>
+            {showStartPicker && (
+              <DateTimePicker value={startTime} mode="time" display="spinner" onChange={onChangeStart} />
+            )}
+            {showEndPicker && (
+              <DateTimePicker value={endTime} mode="time" display="spinner" onChange={onChangeEnd} />
+            )}
+          </View>
+
+          <Text style={styles.label}>Location Name</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', width: '95%', justifyContent: 'flex-end', gap: 8 }}>
           <TextInput
-            style={styles.input}
-            value={fields.location.coordinates[1] != null ? String(fields.location.coordinates[1]) : ''}
-            onChangeText={t => setFields(f => ({ ...f, location: { ...f.location, coordinates: [f.location.coordinates[0], t ? Number(t) : undefined] } }))}
-            placeholder="e.g. 40.7484"
-            keyboardType="decimal-pad"
+            style={[styles.input, {flex: 1, marginRight: 8}]}
+            value={fields.location_name || ''}
+            onChangeText={t => setFields(f => ({ ...f, location_name: t }))}
+            placeholder="Location name (optional)"
           />
-        </View>
-      </View>
+            <TouchableOpacity
+              style={[styles.dateBox, { width: 140, justifyContent: 'center', alignItems: 'center' }]}
+              onPress={() => {
+                const coords = fields.location?.coordinates || [undefined, undefined];
+                const lng = coords[0];
+                const lat = coords[1];
+                navigation.navigate?.('LocationPicker', {
+                  address: fields.location_name || '',
+                  lat: typeof lat === 'number' ? lat : undefined,
+                  lng: typeof lng === 'number' ? lng : undefined,
+                  onPick: (loc: { lat: number; lng: number; address: string }) => {
+                    setFields(f => ({
+                      ...f,
+                      location_name: loc.address,
+                      location: { type: 'Point', coordinates: [loc.lng, loc.lat] },
+                    }));
+                  },
+                });
+              }}
+            >
+              <Text style={styles.dateText}>Pick Location</Text>
+            </TouchableOpacity>
+          </View>
 
-      <Text style={styles.label}>Description</Text>
-      <TextInput
-        style={[styles.input, styles.multiline]}
-        value={fields.description}
-        onChangeText={t => setFields(f => ({ ...f, description: t }))}
-        placeholder="Description"
-        multiline
-        numberOfLines={4}
-      />
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 16 }}>
+            <View style={{ width: '48%' }}>
+              <Text style={styles.label}>Longitude</Text>
+              <TextInput
+                style={styles.input}
+                value={fields.location.coordinates[0] != null ? String(fields.location.coordinates[0]) : ''}
+                onChangeText={t => setFields(f => ({ ...f, location: { ...f.location, coordinates: [t ? Number(t) : undefined, f.location.coordinates[1]] } }))}
+                placeholder="e.g. -73.9857"
+                keyboardType="decimal-pad"
+                returnKeyType="done"
+              />
+            </View>
+            <View style={{ width: '48%' }}>
+              <Text style={styles.label}>Latitude</Text>
+              <TextInput
+                style={styles.input}
+                value={fields.location.coordinates[1] != null ? String(fields.location.coordinates[1]) : ''}
+                onChangeText={t => setFields(f => ({ ...f, location: { ...f.location, coordinates: [f.location.coordinates[0], t ? Number(t) : undefined] } }))}
+                placeholder="e.g. 40.7484"
+                keyboardType="decimal-pad"
+                returnKeyType="done"
+              />
+            </View>
+          </View>
 
-      <View style={styles.buttonRow}>
-        <Button title="Save" onPress={onSave} />
-        <View style={styles.buttonSpacer} />
-        <Button title="Cancel" onPress={onCancel} color="#888" />
-      </View>
-    </ScrollView>
+          <Text style={styles.label}>Description</Text>
+          <TextInput
+            style={[styles.input, styles.multiline]}
+            value={fields.description}
+            onChangeText={t => setFields(f => ({ ...f, description: t }))}
+            placeholder="Description"
+            multiline
+            numberOfLines={4}
+            returnKeyType="done"
+          />
+
+          <View style={styles.buttonRow}>
+            <Button title="Save" onPress={onSave} />
+            <View style={styles.buttonSpacer} />
+            <Button title="Cancel" onPress={onCancel} color="#888" />
+          </View>
+        </ScrollView>
+      </TouchableWithoutFeedback>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 16, backgroundColor: '#fff' },
+  container: { padding: 16, backgroundColor: '#fff', paddingBottom: 32 },
   header: { fontSize: 22, fontWeight: '700', marginBottom: 12, textAlign: 'center' },
   label: { marginTop: 16, fontSize: 14, color: '#222' },
   input: { borderWidth: 1, borderColor: '#ccc', borderRadius: 8, padding: 10, marginTop: 6, color: '#000' },
