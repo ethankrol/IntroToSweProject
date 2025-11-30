@@ -121,6 +121,7 @@ export default function LoginScreen({ onValidLogin }: Props) {
     })();
   };
 
+// #AIGEN
   return (
     <>
       <StatusBar barStyle="light-content" backgroundColor="#003d31" />
