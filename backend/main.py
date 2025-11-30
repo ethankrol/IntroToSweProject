@@ -527,6 +527,81 @@ def join_via_delegate(delegate_org_code: str, current_user=Depends(get_current_u
         return EventOut.model_validate(event_doc)
     return {"event_id": event_id}
 
+@app.get("/volunteer/profile")
+def volunteer_profile(current_user=Depends(get_current_user)):
+    """Return volunteer profile: delegate info, org code, and volunteers in the same org."""
+    db = app.db
+    email = getattr(current_user, "email", None)
+    if not email:
+        raise HTTPException(status_code=500, detail="Missing user email")
+
+    vol_doc = db["event_volunteers"].find_one({"user_id": email, "role": "volunteer"})
+    if not vol_doc:
+        raise HTTPException(status_code=404, detail="Volunteer not found")
+
+    code = vol_doc.get("delegate_org_code")
+    event_id = vol_doc.get("event_id")
+    organization = vol_doc.get("organization")
+    delegate_doc = db["event_volunteers"].find_one({"delegate_org_code": code, "role": "delegate"})
+
+    volunteers = list(db["event_volunteers"].find({
+        "delegate_org_code": code,
+        "role": "volunteer"
+    }))
+    volunteer_count = len(volunteers)
+    for v in volunteers:
+        v["_id"] = str(v.get("_id", ""))
+
+    return {
+        "email": email,
+        "organization": organization,
+        "delegate_org_code": code,
+        "event_id": event_id,
+        "delegate_email": delegate_doc.get("user_id") if delegate_doc else None,
+        "volunteer_count": volunteer_count,
+        "volunteers": [{"email": v.get("user_id"), "organization": v.get("organization")} for v in volunteers],
+    }
+
+class RemoveVolunteer(BaseModel):
+    volunteer_email: EmailStr
+
+@app.post("/delegate/volunteer/remove")
+def remove_volunteer(payload: RemoveVolunteer, current_user=Depends(get_current_user)):
+    """Allow a delegate to remove a volunteer from their org."""
+    db = app.db
+    email = getattr(current_user, "email", None)
+    if not email:
+        raise HTTPException(status_code=500, detail="Missing user email")
+    delegate_doc = db["event_volunteers"].find_one({"user_id": email, "role": "delegate"})
+    if not delegate_doc:
+        raise HTTPException(status_code=403, detail="Not a delegate")
+    code = delegate_doc.get("delegate_org_code")
+    vol_doc = db["event_volunteers"].find_one({"delegate_org_code": code, "role": "volunteer", "user_id": payload.volunteer_email})
+    if not vol_doc:
+        raise HTTPException(status_code=404, detail="Volunteer not found in your org")
+    event_id = vol_doc.get("event_id")
+    db["event_volunteers"].delete_one({"_id": vol_doc["_id"]})
+    if event_id:
+        db["task_assignments"].delete_many({"event_id": event_id, "user_id": payload.volunteer_email})
+    return {"ok": True}
+
+@app.post("/volunteer/leave")
+def volunteer_leave(current_user=Depends(get_current_user)):
+    """Volunteer leaves their org; removes their event membership and task assignments."""
+    db = app.db
+    email = getattr(current_user, "email", None)
+    if not email:
+        raise HTTPException(status_code=500, detail="Missing user email")
+    vol_doc = db["event_volunteers"].find_one({"user_id": email, "role": "volunteer"})
+    if not vol_doc:
+        raise HTTPException(status_code=404, detail="Not a volunteer")
+    event_id = vol_doc.get("event_id")
+    code = vol_doc.get("delegate_org_code")
+    db["event_volunteers"].delete_one({"_id": vol_doc["_id"]})
+    if event_id:
+        db["task_assignments"].delete_many({"event_id": event_id, "user_id": email})
+    return {"ok": True, "delegate_org_code": code}
+
 
 # --------------- Task APIs ----------------
 @app.post('/events/{event_id}/tasks', response_model=TaskOut)
