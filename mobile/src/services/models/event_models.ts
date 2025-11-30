@@ -21,7 +21,7 @@ export type EventResponse = EventUpsertPayload & {
     updated_at?: string;
 };
 
-// Event detail variants (mirrors backend OrganizerEventDetails / DelegateEventDetails / VolunteerEventDetails)
+// mirrors backend OrganizerEventDetails / DelegateEventDetails / VolunteerEventDetails
 export type BaseEventDetail = {
     name: string;
     description?: string | null;
@@ -38,7 +38,7 @@ export type OrganizerEventDetail = BaseEventDetail & {
     delegate_join_code: string;
     total_attendees?: number | null;
     volunteers?: any[] | null;
-    delegates?: any[] | null; // backend currently returns raw docs; keep loose typing
+    delegates?: any[] | null; 
 };
 
 export type VolunteerEventDetail = BaseEventDetail & {
@@ -92,4 +92,14 @@ export type TaskPayload = {
 export type TaskResponse = TaskPayload & {
     id?: string;
     event_id: string;
+};
+
+export type DelegateProfile = {
+    email: string;
+    name?: string;
+    organization?: string;
+    delegate_org_code: string;
+    event_id?: string | null;
+    volunteer_count: number;
+    volunteers: { email?: string; organization?: string }[];
 };

@@ -5,6 +5,7 @@ import {
     EventDetail,
     TaskPayload,
     TaskResponse,
+    DelegateProfile,
 } from './models/event_models';
 import { getCookie } from './cookie';
 
@@ -128,6 +129,59 @@ export async function assignDelegate(eventId: string, taskId: string, delegateEm
     if (!res.ok) {
         const text = await res.text();
         throw new Error(`Failed to assign delegate: ${res.status} ${text}`);
+    }
+    return await res.json();
+}
+
+export async function registerDelegate(eventId: string | null, organization: string): Promise<{ event_id: string | null; delegate_org_code: string }> {
+    const headers = await authHeaders();
+    const url = eventId
+        ? `${API_BASE_URL}/delegate/register?event_id=${encodeURIComponent(eventId)}`
+        : `${API_BASE_URL}/delegate/register`;
+    const res = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ organization }),
+    });
+    if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Failed to register delegate: ${res.status} ${text}`);
+    }
+    return await res.json();
+}
+
+export async function joinViaDelegateCode(code: string): Promise<any> {
+    const headers = await authHeaders();
+    const res = await fetch(`${API_BASE_URL}/delegate/join/${code.trim()}`, {
+        method: 'POST',
+        headers,
+    });
+    if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Failed to join with delegate code: ${res.status} ${text}`);
+    }
+    return await res.json();
+}
+
+export async function fetchDelegateProfile(): Promise<DelegateProfile> {
+    const headers = await authHeaders();
+    const res = await fetch(`${API_BASE_URL}/delegate/profile`, { headers });
+    if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Failed to load delegate profile: ${res.status} ${text}`);
+    }
+    return await res.json();
+}
+
+export async function attachDelegateToEvent(eventId: string, delegateCode: string): Promise<{ event_id: string; delegate_org_code: string }> {
+    const headers = await authHeaders();
+    const res = await fetch(`${API_BASE_URL}/delegate/attach/${encodeURIComponent(eventId)}/${delegateCode.trim()}`, {
+        method: 'POST',
+        headers,
+    });
+    if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Failed to attach delegate: ${res.status} ${text}`);
     }
     return await res.json();
 }
