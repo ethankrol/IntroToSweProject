@@ -1,9 +1,17 @@
 import React, { useEffect, useState, useCallback} from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, Alert, FlatList, ActivityIndicator } from 'react-native';
 import { useNavigation, useFocusEffect} from '@react-navigation/native';
-import { fetchEvents, registerDelegate, joinViaDelegateCode, fetchDelegateProfile, attachDelegateToEvent } from '../services/events';
-import { EventResponse } from '../services/models/event_models';
-import { DelegateProfile } from '../services/models/event_models';
+import {
+  fetchEvents,
+  registerDelegate,
+  joinViaDelegateCode,
+  fetchDelegateProfile,
+  attachDelegateToEvent,
+  fetchVolunteerProfile,
+  leaveVolunteerGroup,
+  removeVolunteer,
+} from '../services/events';
+import { EventResponse, DelegateProfile, VolunteerProfile } from '../services/models/event_models';
 
 type TabRole = 'organizer' | 'delegate' | 'volunteer';
 
@@ -18,6 +26,7 @@ export default function HomeScreen() {
   const [delegateEventId, setDelegateEventId] = useState('');
   const [issuedCode, setIssuedCode] = useState<string | null>(null);
   const [profile, setProfile] = useState<DelegateProfile | null>(null);
+  const [volProfile, setVolProfile] = useState<VolunteerProfile | null>(null);
   const [attachEventId, setAttachEventId] = useState('');
 
   const load = async (role: TabRole) => {
@@ -59,6 +68,19 @@ export default function HomeScreen() {
     loadProfile();
   }, [tab]);
 
+  useEffect(() => {
+    const loadVolProfile = async () => {
+      if (tab !== 'volunteer') return;
+      try {
+        const prof = await fetchVolunteerProfile();
+        setVolProfile(prof);
+      } catch (e) {
+        // ignore if not joined yet
+      }
+    };
+    loadVolProfile();
+  }, [tab]);
+
   const onCreate = () => {
     navigation.navigate('EditEvent' as never);
   };
@@ -93,6 +115,8 @@ export default function HomeScreen() {
         }
         const res = await joinViaDelegateCode(code);
         Alert.alert('Joined', 'Joined via delegate org code');
+        const vp = await fetchVolunteerProfile();
+        setVolProfile(vp);
         setJoinModalVisible(false);
       }
       load(tab);
@@ -200,17 +224,80 @@ export default function HomeScreen() {
                 <Text style={styles.primaryActionText}>Join Event</Text>
               </TouchableOpacity>
             </>
-          )}
-          <Text style={styles.modalLabel}>Volunteers ({profile.volunteer_count})</Text>
-          {profile.volunteers.length === 0 ? (
-            <Text style={styles.profileValue}>None yet</Text>
-          ) : (
-            profile.volunteers.map((v, idx) => (
-              <Text key={v.email || idx} style={styles.profileValue}>
+        )}
+        <Text style={styles.modalLabel}>Volunteers ({profile.volunteer_count})</Text>
+        {profile.volunteers.length === 0 ? (
+          <Text style={styles.profileValue}>None yet</Text>
+        ) : (
+          profile.volunteers.map((v, idx) => (
+            <View key={v.email || idx} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text style={styles.profileValue}>
                 {v.email || 'Unknown'} {v.organization ? `(${v.organization})` : ''}
               </Text>
-            ))
+              <TouchableOpacity
+                onPress={async () => {
+                  try {
+                    setLoading(true);
+                    await removeVolunteer(v.email || '');
+                    const refreshed = await fetchDelegateProfile();
+                    setProfile(refreshed);
+                    Alert.alert('Removed', 'Volunteer removed');
+                  } catch (e: any) {
+                    Alert.alert('Remove failed', e?.message ?? 'Unable to remove');
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+                style={{ paddingHorizontal: 8, paddingVertical: 4 }}
+              >
+                <Text style={{ color: '#b91c1c', fontWeight: '700' }}>Remove</Text>
+              </TouchableOpacity>
+            </View>
+          ))
+        )}
+      </View>
+    )}
+      {tab === 'volunteer' && volProfile && (
+        <View style={styles.profileCard}>
+          <Text style={styles.modalTitle}>My Group</Text>
+          <Text style={styles.modalLabel}>Delegate</Text>
+          <Text style={[styles.profileValue, { fontWeight: '700' }]}>{volProfile.delegate_email || 'Unknown'}</Text>
+          <Text style={styles.modalLabel}>Organization</Text>
+          <Text style={styles.profileValue}>{volProfile.organization || 'N/A'}</Text>
+          <Text style={styles.modalLabel}>Org Code</Text>
+          <Text style={[styles.profileValue, { fontWeight: '700' }]}>{volProfile.delegate_org_code}</Text>
+          <Text style={styles.modalLabel}>Volunteers ({volProfile.volunteer_count})</Text>
+          {volProfile.volunteers.length === 0 ? (
+            <Text style={styles.profileValue}>None yet</Text>
+          ) : (
+            <>
+              <Text style={[styles.profileValue, { fontWeight: '700' }]}>
+                {volProfile.delegate_email || 'Delegate'}
+              </Text>
+              {volProfile.volunteers.map((v, idx) => (
+                <Text key={v.email || idx} style={styles.profileValue}>
+                  {v.email || 'Unknown'} {v.organization ? `(${v.organization})` : ''}
+                </Text>
+              ))}
+            </>
           )}
+          <TouchableOpacity
+            style={[styles.primaryAction, { marginTop: 8 }]}
+            onPress={async () => {
+              try {
+                setLoading(true);
+                await leaveVolunteerGroup();
+                setVolProfile(null);
+                Alert.alert('Left group', 'You have left the group.');
+              } catch (e: any) {
+                Alert.alert('Leave failed', e?.message ?? 'Unable to leave');
+              } finally {
+                setLoading(false);
+              }
+            }}
+          >
+            <Text style={styles.primaryActionText}>Leave Group</Text>
+          </TouchableOpacity>
         </View>
       )}
       {loading && <ActivityIndicator style={{ marginVertical: 12 }} />}

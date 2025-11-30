@@ -103,3 +103,13 @@ export type DelegateProfile = {
     volunteer_count: number;
     volunteers: { email?: string; organization?: string }[];
 };
+
+export type VolunteerProfile = {
+    email: string;
+    organization?: string;
+    delegate_org_code?: string;
+    event_id?: string | null;
+    delegate_email?: string | null;
+    volunteer_count: number;
+    volunteers: { email?: string; organization?: string }[];
+};

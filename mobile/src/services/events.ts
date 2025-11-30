@@ -6,6 +6,7 @@ import {
     TaskPayload,
     TaskResponse,
     DelegateProfile,
+    VolunteerProfile,
 } from './models/event_models';
 import { getCookie } from './cookie';
 
@@ -182,6 +183,43 @@ export async function attachDelegateToEvent(eventId: string, delegateCode: strin
     if (!res.ok) {
         const text = await res.text();
         throw new Error(`Failed to attach delegate: ${res.status} ${text}`);
+    }
+    return await res.json();
+}
+
+export async function fetchVolunteerProfile(): Promise<VolunteerProfile> {
+    const headers = await authHeaders();
+    const res = await fetch(`${API_BASE_URL}/volunteer/profile`, { headers });
+    if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Failed to load volunteer profile: ${res.status} ${text}`);
+    }
+    return await res.json();
+}
+
+export async function leaveVolunteerGroup(): Promise<any> {
+    const headers = await authHeaders();
+    const res = await fetch(`${API_BASE_URL}/volunteer/leave`, {
+        method: 'POST',
+        headers,
+    });
+    if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Failed to leave group: ${res.status} ${text}`);
+    }
+    return await res.json();
+}
+
+export async function removeVolunteer(volunteerEmail: string): Promise<any> {
+    const headers = await authHeaders();
+    const res = await fetch(`${API_BASE_URL}/delegate/volunteer/remove`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ volunteer_email: volunteerEmail }),
+    });
+    if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Failed to remove volunteer: ${res.status} ${text}`);
     }
     return await res.json();
 }
