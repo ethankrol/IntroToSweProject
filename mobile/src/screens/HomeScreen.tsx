@@ -84,7 +84,15 @@ export default function HomeScreen() {
             <Text style={styles.editText}>Edit</Text>
           </TouchableOpacity>
         ) : null}
-        <TouchableOpacity style={[styles.editButton, { marginLeft: 8, backgroundColor: '#4b5563' }]} onPress={() => (navigation as any).navigate('EventDetail', { event: item, role: tab })}>
+        <TouchableOpacity
+          style={[styles.editButton, { marginLeft: 8, backgroundColor: '#4b5563' }]}
+          onPress={() =>
+            (navigation as any).navigate('EventDetail', {
+              eventId: item._id ?? (item as any).id,
+              role: tab,
+            })
+          }
+        >
           <Text style={styles.editText}>Details</Text>
         </TouchableOpacity>
       </View>

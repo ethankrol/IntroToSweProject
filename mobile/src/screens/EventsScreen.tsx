@@ -1,158 +1,69 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, StyleSheet, Button, Alert, TouchableOpacity } from 'react-native';
-import { useNavigation, useRoute } from '@react-navigation/native';
-
-type Task = { id: string; title: string; assignedTo?: string };
-
-type Event = {
-  id: string;
-  title: string;
-  date: string;
-  location: string;
-  description?: string;
-  tasks?: Task[];
-};
-
-const MOCK_EVENTS: Event[] = [
-  {
-    id: '1',
-    title: 'Community Clean-up',
-    date: '2025-11-01',
-    location: 'City Park',
-    description: 'Join volunteers to clean up the park and plant new trees.'
-    ,
-    tasks: [
-      { id: '1t1', title: 'Bring trash bags', assignedTo: 'volunteer1' },
-      { id: '1t2', title: 'Arrange tools', assignedTo: 'volunteer2' }
-    ]
-  },
-  {
-    id: '2',
-    title: 'Food Drive',
-    date: '2025-11-15',
-    location: 'Town Hall',
-    description: 'Collect and sort donations for local food banks.'
-    ,
-    tasks: [
-      { id: '2t1', title: 'Set up collection boxes', assignedTo: 'volunteer3' },
-      { id: '2t2', title: 'Coordinate drop-offs', assignedTo: 'volunteer4' }
-    ]
-  },
-  {
-    id: '3',
-    title: 'Charity Run',
-    date: '2025-12-05',
-    location: 'Riverside Trail',
-    description: '5K run to raise funds for youth programs.',
-    // example tasks for admin/volunteer
-    // tasks are objects with id, title, assignedTo(optional)
-    tasks: [
-      { id: 't1', title: 'Set up water stations', assignedTo: 'volunteerA' },
-      { id: 't2', title: 'Coordinate volunteers', assignedTo: 'volunteerB' }
-    ]
-  }
-];
-
-
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, FlatList, StyleSheet, Alert, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import { fetchEvents } from '../services/events';
+import { EventResponse } from '../services/models/event_models';
 
 export default function EventsScreen() {
   const navigation = useNavigation();
-  const route = useRoute();
-  // route.params may be undefined in nav typing; read initial role if provided
-  // initialize local role state so the user can continue regardless of backend role
-  // @ts-ignore
-  const initialRole: 'admin' | 'volunteer' = route?.params?.role ?? 'volunteer';
 
+  const [tab, setTab] = useState<'organizer' | 'delegate' | 'volunteer'>('volunteer');
+  const [events, setEvents] = useState<EventResponse[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
-  // Need to add a tab here for switching between three different kinds of events (organizer, delegate, volunteer)
-  const [tab, setTab] = useState<'organizer' | 'delegate' | 'volunteer'>('volunteer'); // Create three tabs, with one (volunteer tab) being the default
-  const [role, setRole] = useState<'admin' | 'volunteer'>(initialRole);
-  const [events, setEvents] = useState<Event[]>(MOCK_EVENTS);
+  const loadEvents = useCallback(async (role: typeof tab, isRefresh = false) => {
+    try {
+      if (isRefresh) setRefreshing(true);
+      else setLoading(true);
+      const data = await fetchEvents(role);
+      setEvents(data);
+    } catch (err: any) {
+      console.error(err);
+      Alert.alert('Error', err?.message ?? 'Failed to load events');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
 
-  const onEdit = (event: Event) => {
-    // navigate to EditEvent screen, passing the event
+  useEffect(() => {
+    loadEvents(tab);
+  }, [tab, loadEvents]);
+
+  const onEdit = (event: EventResponse) => {
     // @ts-ignore
     navigation.navigate('EditEvent', { event } as never);
   };
 
-  // We need to monitor the tab status to load different events depending on which one was changed to
-  useEffect(() => {
-    console.log("Fetching user event data for:", tab);
-  }, [tab]);
-
-  const toggleRole = () => setRole((r) => (r === 'admin' ? 'volunteer' : 'admin'));
-
-  const onJoin = (event: Event) => {
-    // Placeholder: in real app call backend to join
-    Alert.alert('Joined', `You joined ${event.title}`);
-  };
-
-  const onCancelTask = (eventId: string, taskId: string) => {
-    Alert.alert('Cancel task', 'Are you sure you want to cancel this task?', [
-      { text: 'No', style: 'cancel' },
-      {
-        text: 'Yes',
-        style: 'destructive',
-        onPress: () => {
-          setEvents((prev) =>
-            prev.map((e) =>
-              e.id === eventId ? { ...e, tasks: e.tasks?.filter((t) => t.id !== taskId) } : e
-            )
-          );
-        }
-      }
-    ]);
-  };
-
-  const renderItem = ({ item }: { item: Event }) => (
+  const renderItem = ({ item }: { item: EventResponse }) => (
     <View style={styles.card}>
       <View style={styles.row}>
-        <Text style={styles.title}>{item.title}</Text>
-        <Text style={styles.date}>{item.date}</Text>
+        <Text style={styles.title}>{item.name}</Text>
+        <Text style={styles.date}>{new Date(item.start_date).toLocaleDateString()}</Text>
       </View>
-      <Text style={styles.location}>{item.location}</Text>
+      {item.location_name ? <Text style={styles.location}>{item.location_name}</Text> : null}
       {item.description ? <Text style={styles.description}>{item.description}</Text> : null}
       <View style={styles.actions}>
         {tab === 'organizer' ? (
           <TouchableOpacity style={styles.editButton} onPress={() => onEdit(item)}>
             <Text style={styles.editText}>Edit</Text>
           </TouchableOpacity>
-        ) : (
-          <TouchableOpacity style={styles.joinButton} onPress={() => onJoin(item)}>
-            <Text style={styles.joinText}>Join</Text>
-          </TouchableOpacity>
-        )}
+        ) : null}
         {/* Details button - visible to all roles */}
         {/* @ts-ignore - navigation typing is generic here, passing params dynamically */}
-        <TouchableOpacity style={[styles.editButton, { marginLeft: 8, backgroundColor: '#4b5563' }]} onPress={() => (navigation as any).navigate('EventDetail', { event: item, role })}>
+        <TouchableOpacity
+          style={[styles.editButton, { marginLeft: 8, backgroundColor: '#4b5563' }]}
+          onPress={() => (navigation as any).navigate('EventDetail', { eventId: item._id ?? item.id, role: tab })}
+        >
           <Text style={styles.editText}>Details</Text>
         </TouchableOpacity>
       </View>
-
-      {/* Tasks list */}
-      {item.tasks && item.tasks.length > 0 && (
-        <View style={{ marginTop: 10 }}>
-          <Text style={{ fontWeight: '700', marginBottom: 6 }}>Tasks</Text>
-          {item.tasks.map((task) => (
-            <View key={task.id} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6 }}>
-              <Text style={{ flex: 1 }}>{task.title}</Text>
-              {role === 'admin' ? (
-                <TouchableOpacity style={styles.cancelButton} onPress={() => onCancelTask(item.id, task.id)}>
-                  <Text style={{ color: '#fff' }}>Cancel</Text>
-                </TouchableOpacity>
-              ) : (
-                <Text style={{ color: '#666' }}>{task.assignedTo ? `Assigned: ${task.assignedTo}` : ''}</Text>
-              )}
-            </View>
-          ))}
-        </View>
-      )}
     </View>
   );
 
   return (
     <View style={styles.container}>
-
       <View style={styles.navbar}>
         {['organizer', 'delegate', 'volunteer'].map(role => (
           <TouchableOpacity
@@ -169,17 +80,26 @@ export default function EventsScreen() {
           </TouchableOpacity>
         ))}
       </View>
-      {/*<View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginBottom: 12 }}>
-        <TouchableOpacity onPress={toggleRole} style={{ marginRight: 8 }}>
-          <Text style={{ color: '#2563eb' }}>Switch to {role === 'admin' ? 'volunteer' : 'admin'}</Text>
-        </TouchableOpacity>
-      </View>*/}
-      <FlatList
-        data={events}
-        keyExtractor={(i) => i.id}
-        renderItem={renderItem}
-        contentContainerStyle={{ paddingBottom: 24 }}
-      />
+      {loading && !refreshing ? (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <ActivityIndicator size="large" color="#059669" />
+        </View>
+      ) : (
+        <FlatList
+          data={events}
+          keyExtractor={(i) => i._id ?? (i as any).id}
+          renderItem={renderItem}
+          contentContainerStyle={{ paddingBottom: 24 }}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={() => loadEvents(tab, true)} />
+          }
+          ListEmptyComponent={
+            <Text style={{ textAlign: 'center', marginTop: 24, color: '#555' }}>
+              No events yet for this role.
+            </Text>
+          }
+        />
+      )}
     </View>
   );
 }
@@ -272,7 +192,7 @@ const styles = StyleSheet.create({
   backgroundColor: '#2563eb',
   borderRadius: 6,
 },
-joinText: {
+  joinText: {
   color: '#fff',
   fontWeight: '700'
 },
