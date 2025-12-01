@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert, TouchableOpacity, TextInput, Platform } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { fetchEventDetails, fetchTasks, createTask, assignDelegate } from '../services/events';
+import { fetchEventDetails, fetchTasks, createTask, assignDelegate, updateTask } from '../services/events';
 import { DelegateEventDetail, EventDetail, OrganizerEventDetail, TaskResponse, VolunteerEventDetail } from '../services/models/event_models';
 
 type RouteParams = {
@@ -48,6 +48,7 @@ export default function EventDetailScreen() {
     assignedDelegate: '',
     organizerContact: '',
   });
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [showDelegateDropdown, setShowDelegateDropdown] = useState(false);
   const [taskDate, setTaskDate] = useState<Date>(new Date());
   const [taskStartTime, setTaskStartTime] = useState<Date>(new Date());
@@ -146,7 +147,48 @@ export default function EventDetailScreen() {
     });
   };
 
-  const onCreateTask = async () => {
+  const onEditTask = (task: TaskResponse) => {
+    setEditingTaskId(task.id || task.task_join_code || null);
+    setTaskForm({
+      name: task.name || '',
+      description: task.description || '',
+      locationName: task.location_name || '',
+      lng: task.location?.coordinates?.[0] != null ? String(task.location.coordinates[0]) : '',
+      lat: task.location?.coordinates?.[1] != null ? String(task.location.coordinates[1]) : '',
+      maxVolunteers: task.max_volunteers != null ? String(task.max_volunteers) : '',
+      assignedDelegate: task.assigned_delegate || '',
+      organizerContact: (task as any).organizer_contact_info || '',
+    });
+    if (task.start_time) {
+      const start = new Date(task.start_time);
+      setTaskDate(start);
+      setTaskStartTime(start);
+    }
+    if (task.end_time) {
+      const end = new Date(task.end_time);
+      setTaskEndTime(end);
+    }
+  };
+
+  const onCancelEdit = () => {
+    setEditingTaskId(null);
+    const now = new Date();
+    setTaskForm({
+      name: '',
+      description: '',
+      locationName: '',
+      lng: '',
+      lat: '',
+      maxVolunteers: '',
+      assignedDelegate: '',
+      organizerContact: '',
+    });
+    setTaskDate(now);
+    setTaskStartTime(now);
+    setTaskEndTime(now);
+  };
+
+  const onSubmitTask = async () => {
     if (!resolvedEventId) return;
     if (!taskForm.name.trim()) return Alert.alert('Missing name', 'Task name is required.');
     if (!taskForm.assignedDelegate.trim()) return Alert.alert('Missing delegate', 'Please select a delegate.');
@@ -168,9 +210,15 @@ export default function EventDetailScreen() {
         assigned_delegate: taskForm.assignedDelegate.trim(),
         organizer_contact_info: taskForm.organizerContact.trim() || undefined,
       };
-      await createTask(resolvedEventId, payload);
-      Alert.alert('Success', 'Task created');
+      if (editingTaskId) {
+        await updateTask(resolvedEventId, editingTaskId, payload);
+        Alert.alert('Success', 'Task updated');
+      } else {
+        await createTask(resolvedEventId, payload);
+        Alert.alert('Success', 'Task created');
+      }
       setTaskForm((prev) => ({ ...prev, name: '', description: '', locationName: '', maxVolunteers: '', lng: '', lat: '', organizerContact: '' }));
+      setEditingTaskId(null);
       const now = new Date();
       setTaskDate(now);
       setTaskStartTime(now);
@@ -279,7 +327,7 @@ export default function EventDetailScreen() {
           onAssignDelegate={onAssignDelegate}
           taskForm={taskForm}
           setTaskForm={setTaskForm}
-          onCreateTask={onCreateTask}
+          onCreateTask={onSubmitTask}
           showDelegateDropdown={showDelegateDropdown}
           setShowDelegateDropdown={setShowDelegateDropdown}
           taskDate={taskDate}
@@ -297,6 +345,9 @@ export default function EventDetailScreen() {
           formatDateLocal={formatDateLocal}
           formatTime={formatTime}
           onPickLocation={openTaskLocationPicker}
+          editingTaskId={editingTaskId}
+          onEditTask={onEditTask}
+          onCancelEdit={onCancelEdit}
         />
       )}
     </ScrollView>
@@ -391,6 +442,9 @@ type OrganizerSectionProps = {
   formatDateLocal: (d: Date) => string;
   formatTime: (d: Date) => string;
   onPickLocation: () => void;
+  editingTaskId: string | null;
+  onEditTask: (task: TaskResponse) => void;
+  onCancelEdit: () => void;
 };
 
 function OrganizerSection({
@@ -419,6 +473,9 @@ function OrganizerSection({
   formatDateLocal,
   formatTime,
   onPickLocation,
+  editingTaskId,
+  onEditTask,
+  onCancelEdit,
 }: OrganizerSectionProps) {
   return (
     <>
@@ -429,6 +486,11 @@ function OrganizerSection({
 
       <View style={styles.box}>
         <Text style={styles.boxLabel}>Create task</Text>
+        {editingTaskId ? (
+          <Text style={[styles.boxValue, { color: '#b45309', marginBottom: 8 }]}>
+            Editing existing task
+          </Text>
+        ) : null}
         <TextInput
           style={styles.input}
           placeholder="Task name"
@@ -589,8 +651,13 @@ function OrganizerSection({
         )}
 
         <TouchableOpacity style={styles.primaryButton} onPress={onCreateTask}>
-          <Text style={styles.primaryText}>Create Task</Text>
+          <Text style={styles.primaryText}>{editingTaskId ? 'Update Task' : 'Create Task'}</Text>
         </TouchableOpacity>
+        {editingTaskId ? (
+          <TouchableOpacity style={[styles.primaryButton, { backgroundColor: '#d1d5db', marginTop: 8 }]} onPress={onCancelEdit}>
+            <Text style={[styles.primaryText, { color: '#111' }]}>Cancel Edit</Text>
+          </TouchableOpacity>
+        ) : null}
       </View>
 
       <View style={styles.box}>
@@ -623,6 +690,14 @@ function OrganizerSection({
               </View>
               <Text style={styles.boxLabel}>Assigned delegate</Text>
               <Text style={styles.boxValue}>{t.assigned_delegate || 'Unassigned'}</Text>
+              <View style={{ flexDirection: 'row', marginTop: 6 }}>
+                <TouchableOpacity
+                  style={[styles.assignButton, { backgroundColor: '#bfdbfe', marginRight: 8 }]}
+                  onPress={() => onEditTask(t)}
+                >
+                  <Text style={[styles.assignText, { color: '#1d4ed8' }]}>Edit</Text>
+                </TouchableOpacity>
+              </View>
               {delegateOptions.length ? (
                 <View style={{ marginTop: 8 }}>
                   <Text style={styles.boxLabel}>Assign / change delegate</Text>
