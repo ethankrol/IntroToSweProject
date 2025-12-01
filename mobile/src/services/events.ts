@@ -174,6 +174,19 @@ export async function fetchDelegateProfile(): Promise<DelegateProfile> {
     return await res.json();
 }
 
+export async function leaveDelegateEvent(): Promise<any> {
+    const headers = await authHeaders();
+    const res = await fetch(`${API_BASE_URL}/delegate/leave`, {
+        method: 'POST',
+        headers,
+    });
+    if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Failed to leave event: ${res.status} ${text}`);
+    }
+    return await res.json();
+}
+
 export async function attachDelegateToEvent(eventId: string, delegateCode: string): Promise<{ event_id: string; delegate_org_code: string }> {
     const headers = await authHeaders();
     const res = await fetch(`${API_BASE_URL}/delegate/attach/${encodeURIComponent(eventId)}/${delegateCode.trim()}`, {

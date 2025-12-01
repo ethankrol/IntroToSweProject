@@ -10,6 +10,7 @@ import {
   fetchVolunteerProfile,
   leaveVolunteerGroup,
   removeVolunteer,
+  leaveDelegateEvent,
 } from '../services/events';
 import { EventResponse, DelegateProfile, VolunteerProfile } from '../services/models/event_models';
 
@@ -191,6 +192,32 @@ export default function HomeScreen() {
           <Text style={styles.profileValue}>{profile.organization || 'N/A'}</Text>
           <Text style={styles.modalLabel}>Org Code</Text>
           <Text style={[styles.profileValue, { fontWeight: '700' }]}>{profile.delegate_org_code}</Text>
+          {profile.event_id ? (
+            <>
+              <Text style={styles.modalLabel}>Joined Event</Text>
+              <Text style={styles.profileValue}>{profile.event_id}</Text>
+              <TouchableOpacity
+                style={[styles.primaryAction, { backgroundColor: '#b91c1c', marginTop: 8 }]}
+                onPress={async () => {
+                  try {
+                    setLoading(true);
+                    await leaveDelegateEvent();
+                    const refreshed = await fetchDelegateProfile();
+                    setProfile(refreshed);
+                    setAttachEventId('');
+                    await load('delegate');
+                    Alert.alert('Left event', 'Your org has been detached from the event.');
+                  } catch (e: any) {
+                    Alert.alert('Leave failed', e?.message ?? 'Unable to leave event');
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+              >
+                <Text style={styles.primaryActionText}>Leave Event</Text>
+              </TouchableOpacity>
+            </>
+          ) : null}
           {(!profile.event_id || profile.event_id === 'null') && (
             <>
               <Text style={[styles.modalLabel, { marginTop: 8 }]}>Enter event code to join</Text>

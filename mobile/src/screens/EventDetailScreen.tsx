@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert, TouchableOpacity, TextInput } from 'react-native';
-import { useRoute } from '@react-navigation/native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert, TouchableOpacity, TextInput, Platform } from 'react-native';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { fetchEventDetails, fetchTasks, createTask, assignDelegate } from '../services/events';
 import { DelegateEventDetail, EventDetail, OrganizerEventDetail, TaskResponse, VolunteerEventDetail } from '../services/models/event_models';
 
@@ -14,8 +15,22 @@ type DelegateOption = { value: string; label: string };
 
 export default function EventDetailScreen() {
   const route = useRoute();
+  const navigation = useNavigation<any>();
   const { eventId, event, role = 'volunteer' } = (route.params as RouteParams) || {};
   const resolvedEventId = eventId || event?._id || event?.id;
+
+  const formatDateLocal = (date: Date) => {
+    const year = date.getFullYear();
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const day = date.getDate().toString().padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const formatTime = (date: Date) => {
+    const h = date.getHours().toString().padStart(2, '0');
+    const m = date.getMinutes().toString().padStart(2, '0');
+    return `${h}:${m}`;
+  };
 
   const [detail, setDetail] = useState<EventDetail | null>(null);
   const [tasks, setTasks] = useState<TaskResponse[]>([]);
@@ -27,14 +42,18 @@ export default function EventDetailScreen() {
     name: '',
     description: '',
     locationName: '',
-    startTime: '',
-    endTime: '',
     lng: '',
     lat: '',
     maxVolunteers: '',
     assignedDelegate: '',
   });
   const [showDelegateDropdown, setShowDelegateDropdown] = useState(false);
+  const [taskDate, setTaskDate] = useState<Date>(new Date());
+  const [taskStartTime, setTaskStartTime] = useState<Date>(new Date());
+  const [taskEndTime, setTaskEndTime] = useState<Date>(new Date());
+  const [showTaskDatePicker, setShowTaskDatePicker] = useState(false);
+  const [showTaskStartPicker, setShowTaskStartPicker] = useState(false);
+  const [showTaskEndPicker, setShowTaskEndPicker] = useState(false);
 
   useEffect(() => {
     if (!resolvedEventId) return;
@@ -51,6 +70,15 @@ export default function EventDetailScreen() {
             lng: String(d.location.coordinates[0]),
             lat: String(d.location.coordinates[1]),
           }));
+        }
+        if ('start_date' in d && d.start_date) {
+          const start = new Date((d as any).start_date);
+          setTaskDate(start);
+          setTaskStartTime(start);
+        }
+        if ('end_date' in d && d.end_date) {
+          const end = new Date((d as any).end_date);
+          setTaskEndTime(end);
         }
         if (role === 'organizer') {
           await loadTasks();
@@ -99,6 +127,24 @@ export default function EventDetailScreen() {
       .filter(Boolean) as DelegateOption[];
   }, [detail, role]);
 
+  const openTaskLocationPicker = () => {
+    const lng = parseFloat(taskForm.lng);
+    const lat = parseFloat(taskForm.lat);
+    navigation.navigate?.('LocationPicker', {
+      address: taskForm.locationName || '',
+      lat: Number.isFinite(lat) ? lat : undefined,
+      lng: Number.isFinite(lng) ? lng : undefined,
+      onPick: (loc: { lat: number; lng: number; address: string }) => {
+        setTaskForm((prev: any) => ({
+          ...prev,
+          locationName: loc.address,
+          lng: String(loc.lng),
+          lat: String(loc.lat),
+        }));
+      },
+    });
+  };
+
   const onCreateTask = async () => {
     if (!resolvedEventId) return;
     if (!taskForm.name.trim()) return Alert.alert('Missing name', 'Task name is required.');
@@ -106,6 +152,8 @@ export default function EventDetailScreen() {
     const lng = parseFloat(taskForm.lng);
     const lat = parseFloat(taskForm.lat);
     if (Number.isNaN(lng) || Number.isNaN(lat)) return Alert.alert('Invalid location', 'Enter valid longitude/latitude numbers.');
+    const start = new Date(`${formatDateLocal(taskDate)}T${formatTime(taskStartTime)}:00`);
+    const end = new Date(`${formatDateLocal(taskDate)}T${formatTime(taskEndTime)}:00`);
     try {
       setTaskLoading(true);
       const payload = {
@@ -113,14 +161,18 @@ export default function EventDetailScreen() {
         description: taskForm.description.trim() || undefined,
         location: { type: 'Point' as const, coordinates: [lng, lat] },
         location_name: taskForm.locationName.trim() || undefined,
-        start_time: taskForm.startTime || new Date().toISOString(),
-        end_time: taskForm.endTime || new Date().toISOString(),
+        start_time: start.toISOString(),
+        end_time: end.toISOString(),
         max_volunteers: taskForm.maxVolunteers ? Number(taskForm.maxVolunteers) : undefined,
         assigned_delegate: taskForm.assignedDelegate.trim(),
       };
       await createTask(resolvedEventId, payload);
       Alert.alert('Success', 'Task created');
-      setTaskForm((prev) => ({ ...prev, name: '', description: '', locationName: '', startTime: '', endTime: '', maxVolunteers: '' }));
+      setTaskForm((prev) => ({ ...prev, name: '', description: '', locationName: '', maxVolunteers: '', lng: '', lat: '' }));
+      const now = new Date();
+      setTaskDate(now);
+      setTaskStartTime(now);
+      setTaskEndTime(now);
       const refreshed = await fetchTasks(resolvedEventId);
       setTasks(refreshed);
     } catch (err: any) {
@@ -228,6 +280,21 @@ export default function EventDetailScreen() {
           onCreateTask={onCreateTask}
           showDelegateDropdown={showDelegateDropdown}
           setShowDelegateDropdown={setShowDelegateDropdown}
+          taskDate={taskDate}
+          taskStartTime={taskStartTime}
+          taskEndTime={taskEndTime}
+          showTaskDatePicker={showTaskDatePicker}
+          showTaskStartPicker={showTaskStartPicker}
+          showTaskEndPicker={showTaskEndPicker}
+          setShowTaskDatePicker={setShowTaskDatePicker}
+          setShowTaskStartPicker={setShowTaskStartPicker}
+          setShowTaskEndPicker={setShowTaskEndPicker}
+          setTaskDate={setTaskDate}
+          setTaskStartTime={setTaskStartTime}
+          setTaskEndTime={setTaskEndTime}
+          formatDateLocal={formatDateLocal}
+          formatTime={formatTime}
+          onPickLocation={openTaskLocationPicker}
         />
       )}
     </ScrollView>
@@ -307,6 +374,21 @@ type OrganizerSectionProps = {
   onCreateTask: () => void;
   showDelegateDropdown: boolean;
   setShowDelegateDropdown: (v: boolean) => void;
+  taskDate: Date;
+  taskStartTime: Date;
+  taskEndTime: Date;
+  showTaskDatePicker: boolean;
+  showTaskStartPicker: boolean;
+  showTaskEndPicker: boolean;
+  setShowTaskDatePicker: (v: boolean) => void;
+  setShowTaskStartPicker: (v: boolean) => void;
+  setShowTaskEndPicker: (v: boolean) => void;
+  setTaskDate: (d: Date) => void;
+  setTaskStartTime: (d: Date) => void;
+  setTaskEndTime: (d: Date) => void;
+  formatDateLocal: (d: Date) => string;
+  formatTime: (d: Date) => string;
+  onPickLocation: () => void;
 };
 
 function OrganizerSection({
@@ -320,6 +402,21 @@ function OrganizerSection({
   onCreateTask,
   showDelegateDropdown,
   setShowDelegateDropdown,
+  taskDate,
+  taskStartTime,
+  taskEndTime,
+  showTaskDatePicker,
+  showTaskStartPicker,
+  showTaskEndPicker,
+  setShowTaskDatePicker,
+  setShowTaskStartPicker,
+  setShowTaskEndPicker,
+  setTaskDate,
+  setTaskStartTime,
+  setTaskEndTime,
+  formatDateLocal,
+  formatTime,
+  onPickLocation,
 }: OrganizerSectionProps) {
   return (
     <>
@@ -342,12 +439,92 @@ function OrganizerSection({
           value={taskForm.description}
           onChangeText={(t) => setTaskForm((p: any) => ({ ...p, description: t }))}
         />
-        <TextInput
-          style={styles.input}
-          placeholder="Location name"
-          value={taskForm.locationName}
-          onChangeText={(t) => setTaskForm((p: any) => ({ ...p, locationName: t }))}
-        />
+        <Text style={styles.boxLabel}>Date</Text>
+        <TouchableOpacity
+          style={styles.dateBox}
+          onPress={() => {
+            setShowTaskDatePicker(!showTaskDatePicker);
+            setShowTaskStartPicker(false);
+            setShowTaskEndPicker(false);
+          }}
+        >
+          <Text style={styles.boxValue}>{formatDateLocal(taskDate)}</Text>
+        </TouchableOpacity>
+        {showTaskDatePicker && (
+          <DateTimePicker
+            value={taskDate}
+            mode="date"
+            display="spinner"
+            onChange={(_e, selected) => {
+              if (Platform.OS === 'android') setShowTaskDatePicker(false);
+              if (selected) setTaskDate(selected);
+            }}
+          />
+        )}
+        <View style={styles.timeRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.boxLabel}>Start time</Text>
+            <TouchableOpacity
+              style={styles.dateBox}
+              onPress={() => {
+                setShowTaskStartPicker(!showTaskStartPicker);
+                setShowTaskDatePicker(false);
+                setShowTaskEndPicker(false);
+              }}
+            >
+              <Text style={styles.boxValue}>{formatTime(taskStartTime)}</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={{ flex: 1, marginLeft: 10 }}>
+            <Text style={styles.boxLabel}>End time</Text>
+            <TouchableOpacity
+              style={styles.dateBox}
+              onPress={() => {
+                setShowTaskEndPicker(!showTaskEndPicker);
+                setShowTaskDatePicker(false);
+                setShowTaskStartPicker(false);
+              }}
+            >
+              <Text style={styles.boxValue}>{formatTime(taskEndTime)}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+        <View>
+          {showTaskStartPicker && (
+            <DateTimePicker
+              value={taskStartTime}
+              mode="time"
+              display="spinner"
+              onChange={(_e, selected) => {
+                if (Platform.OS === 'android') setShowTaskStartPicker(false);
+                if (selected) setTaskStartTime(selected);
+              }}
+            />
+          )}
+          {showTaskEndPicker && (
+            <DateTimePicker
+              value={taskEndTime}
+              mode="time"
+              display="spinner"
+              onChange={(_e, selected) => {
+                if (Platform.OS === 'android') setShowTaskEndPicker(false);
+                if (selected) setTaskEndTime(selected);
+              }}
+            />
+          )}
+        </View>
+        <Text style={styles.boxLabel}>Location name</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <TextInput
+            style={[styles.input, { flex: 1, marginRight: 8 }]}
+            placeholder="Location name"
+            value={taskForm.locationName}
+            onChangeText={(t) => setTaskForm((p: any) => ({ ...p, locationName: t }))}
+          />
+          <TouchableOpacity style={[styles.dateBox, { minWidth: 120, alignItems: 'center' }]} onPress={onPickLocation}>
+            <Text style={styles.boxValue}>Pick location</Text>
+          </TouchableOpacity>
+        </View>
         <View style={{ flexDirection: 'row' }}>
           <TextInput
             style={[styles.input, { flex: 1, marginRight: 8 }]}
@@ -364,18 +541,6 @@ function OrganizerSection({
             onChangeText={(t) => setTaskForm((p: any) => ({ ...p, lat: t }))}
           />
         </View>
-        <TextInput
-          style={styles.input}
-          placeholder="Start time (ISO, optional)"
-          value={taskForm.startTime}
-          onChangeText={(t) => setTaskForm((p: any) => ({ ...p, startTime: t }))}
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="End time (ISO, optional)"
-          value={taskForm.endTime}
-          onChangeText={(t) => setTaskForm((p: any) => ({ ...p, endTime: t }))}
-        />
         <TextInput
           style={styles.input}
           placeholder="Max volunteers (optional)"
@@ -505,6 +670,20 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     padding: 10,
     marginBottom: 10
+  },
+  dateBox: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 6,
+    padding: 10,
+    marginBottom: 10,
+    backgroundColor: '#f9fafb'
+  },
+  timeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 4,
+    marginBottom: 6
   },
   dropdown: {
     borderWidth: 1,

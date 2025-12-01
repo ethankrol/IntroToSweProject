@@ -603,6 +603,40 @@ def volunteer_leave(current_user=Depends(get_current_user)):
     return {"ok": True, "delegate_org_code": code}
 
 
+@app.post("/delegate/leave")
+def delegate_leave(current_user=Depends(get_current_user)):
+    """Allow a delegate to detach their org from an event and clear related assignments."""
+    db = app.db
+    email = getattr(current_user, "email", None)
+    if not email:
+        raise HTTPException(status_code=500, detail="Missing user email")
+
+    delegate_doc = db["event_volunteers"].find_one({"user_id": email, "role": "delegate"})
+    if not delegate_doc:
+        raise HTTPException(status_code=404, detail="Delegate not found")
+
+    event_id = delegate_doc.get("event_id")
+    delegate_org_code = delegate_doc.get("delegate_org_code")
+
+    # Detach the delegate from the event while keeping their org code
+    db["event_volunteers"].update_one({"_id": delegate_doc["_id"]}, {"$set": {"event_id": None}})
+
+    # Detach all volunteers in the same org
+    volunteers = list(db["event_volunteers"].find({"delegate_org_code": delegate_org_code, "role": "volunteer"}))
+    if volunteers:
+        db["event_volunteers"].update_many(
+            {"delegate_org_code": delegate_org_code, "role": "volunteer"},
+            {"$set": {"event_id": None}},
+        )
+
+    # Remove task assignments for this org tied to the event
+    if event_id:
+        user_ids = [email] + [v.get("user_id") for v in volunteers if v.get("user_id")]
+        db["task_assignments"].delete_many({"event_id": event_id, "user_id": {"$in": user_ids}})
+
+    return {"ok": True, "delegate_org_code": delegate_org_code, "event_id": event_id}
+
+
 # --------------- Task APIs ----------------
 @app.post('/events/{event_id}/tasks', response_model=TaskOut)
 def create_task(event_id: str, task: TaskCreate, current_user=Depends(get_current_user)):
