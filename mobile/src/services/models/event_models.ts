@@ -103,7 +103,7 @@ export type DelegateProfile = {
     delegate_org_code: string;
     event_id?: string | null;
     volunteer_count: number;
-    volunteers: { email?: string; organization?: string }[];
+    volunteers: { email?: string; name?: string; organization?: string }[];
 };
 
 export type VolunteerProfile = {
@@ -112,6 +112,7 @@ export type VolunteerProfile = {
     delegate_org_code?: string;
     event_id?: string | null;
     delegate_email?: string | null;
+    delegate_name?: string | null;
     volunteer_count: number;
-    volunteers: { email?: string; organization?: string }[];
+    volunteers: { email?: string; name?: string; organization?: string }[];
 };

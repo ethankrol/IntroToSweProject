@@ -259,7 +259,7 @@ export default function HomeScreen() {
           profile.volunteers.map((v, idx) => (
             <View key={v.email || idx} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
               <Text style={styles.profileValue}>
-                {v.email || 'Unknown'} {v.organization ? `(${v.organization})` : ''}
+                {v.email || 'Unknown'} {v.name ? `(${v.name})` : ''}
               </Text>
               <TouchableOpacity
                 onPress={async () => {
@@ -288,7 +288,10 @@ export default function HomeScreen() {
         <View style={styles.profileCard}>
           <Text style={styles.modalTitle}>My Group</Text>
           <Text style={styles.modalLabel}>Delegate</Text>
-          <Text style={[styles.profileValue, { fontWeight: '700' }]}>{volProfile.delegate_email || 'Unknown'}</Text>
+          <Text style={[styles.profileValue, { fontWeight: '700' }]}>
+            {volProfile.delegate_name || volProfile.delegate_email || 'Unknown'}
+            {volProfile.delegate_name && volProfile.delegate_email ? ` (${volProfile.delegate_email})` : ''}
+          </Text>
           <Text style={styles.modalLabel}>Organization</Text>
           <Text style={styles.profileValue}>{volProfile.organization || 'N/A'}</Text>
           <Text style={styles.modalLabel}>Org Code</Text>
@@ -298,12 +301,9 @@ export default function HomeScreen() {
             <Text style={styles.profileValue}>None yet</Text>
           ) : (
             <>
-              <Text style={[styles.profileValue, { fontWeight: '700' }]}>
-                {volProfile.delegate_email || 'Delegate'}
-              </Text>
               {volProfile.volunteers.map((v, idx) => (
                 <Text key={v.email || idx} style={styles.profileValue}>
-                  {v.email || 'Unknown'} {v.organization ? `(${v.organization})` : ''}
+                  {v.name || v.email || 'Unknown'} {v.email && v.name ? `(${v.email})` : ''}
                 </Text>
               ))}
             </>

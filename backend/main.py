@@ -450,6 +450,16 @@ def delegate_profile(current_user=Depends(get_current_user)):
     if not email:
         raise HTTPException(status_code=500, detail="Missing user email")
 
+    def _name_for(user_email: str | None):
+        if not user_email:
+            return ""
+        user_doc = db["users"].find_one({"email": user_email})
+        if not user_doc:
+            return ""
+        first = user_doc.get("first_name") or ""
+        last = user_doc.get("last_name") or ""
+        return f"{first} {last}".strip()
+
     delegate_doc = db["event_volunteers"].find_one({"user_id": email, "role": "delegate"})
     if not delegate_doc:
         raise HTTPException(status_code=404, detail="Delegate not found")
@@ -480,7 +490,14 @@ def delegate_profile(current_user=Depends(get_current_user)):
         "delegate_org_code": code,
         "event_id": event_id,
         "volunteer_count": volunteer_count,
-        "volunteers": [{"email": v.get("user_id"), "organization": v.get("organization")} for v in volunteers],
+        "volunteers": [
+            {
+                "email": v.get("user_id"),
+                "name": _name_for(v.get("user_id")),
+                "organization": v.get("organization"),
+            }
+            for v in volunteers
+        ],
     }
 
 @app.post("/delegate/join/{delegate_org_code}")
@@ -539,6 +556,16 @@ def volunteer_profile(current_user=Depends(get_current_user)):
     if not vol_doc:
         raise HTTPException(status_code=404, detail="Volunteer not found")
 
+    def _name_for(user_email: str | None):
+        if not user_email:
+            return ""
+        user_doc = db["users"].find_one({"email": user_email})
+        if not user_doc:
+            return ""
+        first = user_doc.get("first_name") or ""
+        last = user_doc.get("last_name") or ""
+        return f"{first} {last}".strip()
+
     code = vol_doc.get("delegate_org_code")
     event_id = vol_doc.get("event_id")
     organization = vol_doc.get("organization")
@@ -558,8 +585,16 @@ def volunteer_profile(current_user=Depends(get_current_user)):
         "delegate_org_code": code,
         "event_id": event_id,
         "delegate_email": delegate_doc.get("user_id") if delegate_doc else None,
+        "delegate_name": _name_for(delegate_doc.get("user_id") if delegate_doc else None),
         "volunteer_count": volunteer_count,
-        "volunteers": [{"email": v.get("user_id"), "organization": v.get("organization")} for v in volunteers],
+        "volunteers": [
+            {
+                "email": v.get("user_id"),
+                "name": _name_for(v.get("user_id")),
+                "organization": v.get("organization"),
+            }
+            for v in volunteers
+        ],
     }
 
 class RemoveVolunteer(BaseModel):
