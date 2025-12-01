@@ -177,11 +177,11 @@ export default function HomeScreen() {
               <Text style={styles.primaryActionText}>Register as Delegate</Text>
             </TouchableOpacity>
           )
-        ) : (
+        ) : !volProfile ? (
           <TouchableOpacity onPress={openJoin} style={styles.primaryAction}>
             <Text style={styles.primaryActionText}>Join with Org Code</Text>
           </TouchableOpacity>
-        )}
+        ) : null}
       </View>
       {tab === 'delegate' && profile && (
         <View style={styles.profileCard}>

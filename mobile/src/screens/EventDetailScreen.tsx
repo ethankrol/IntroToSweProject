@@ -46,6 +46,7 @@ export default function EventDetailScreen() {
     lat: '',
     maxVolunteers: '',
     assignedDelegate: '',
+    organizerContact: '',
   });
   const [showDelegateDropdown, setShowDelegateDropdown] = useState(false);
   const [taskDate, setTaskDate] = useState<Date>(new Date());
@@ -165,10 +166,11 @@ export default function EventDetailScreen() {
         end_time: end.toISOString(),
         max_volunteers: taskForm.maxVolunteers ? Number(taskForm.maxVolunteers) : undefined,
         assigned_delegate: taskForm.assignedDelegate.trim(),
+        organizer_contact_info: taskForm.organizerContact.trim() || undefined,
       };
       await createTask(resolvedEventId, payload);
       Alert.alert('Success', 'Task created');
-      setTaskForm((prev) => ({ ...prev, name: '', description: '', locationName: '', maxVolunteers: '', lng: '', lat: '' }));
+      setTaskForm((prev) => ({ ...prev, name: '', description: '', locationName: '', maxVolunteers: '', lng: '', lat: '', organizerContact: '' }));
       const now = new Date();
       setTaskDate(now);
       setTaskStartTime(now);
@@ -548,6 +550,12 @@ function OrganizerSection({
           value={taskForm.maxVolunteers}
           onChangeText={(t) => setTaskForm((p: any) => ({ ...p, maxVolunteers: t }))}
         />
+        <TextInput
+          style={styles.input}
+          placeholder="Organizer contact info (email or phone)"
+          value={taskForm.organizerContact}
+          onChangeText={(t) => setTaskForm((p: any) => ({ ...p, organizerContact: t }))}
+        />
 
         <TouchableOpacity
           style={styles.dropdown}
@@ -597,6 +605,22 @@ function OrganizerSection({
               <Text style={styles.boxValue}>{t.name}</Text>
               <Text style={styles.boxLabel}>Volunteer join code</Text>
               <Text style={styles.code}>{t.task_join_code}</Text>
+              <Text style={[styles.boxLabel, { marginTop: 6 }]}>Volunteers</Text>
+              <View style={styles.barOuter}>
+                {(() => {
+                  const count = t.volunteer_count ?? 0;
+                  const max = t.max_volunteers;
+                  const pct = max && max > 0 ? Math.min(100, Math.round((count / max) * 100)) : 100;
+                  return (
+                    <>
+                      <View style={[styles.barInner, { width: `${pct}%` }]} />
+                      <Text style={styles.barText}>
+                        {max && max > 0 ? `${count}/${max}` : `${count} volunteers`}
+                      </Text>
+                    </>
+                  );
+                })()}
+              </View>
               <Text style={styles.boxLabel}>Assigned delegate</Text>
               <Text style={styles.boxValue}>{t.assigned_delegate || 'Unassigned'}</Text>
               {delegateOptions.length ? (
@@ -720,5 +744,26 @@ const styles = StyleSheet.create({
   },
   assignText: {
     color: '#065f46'
+  },
+  barOuter: {
+    position: 'relative',
+    height: 18,
+    borderRadius: 6,
+    backgroundColor: '#e5e7eb',
+    overflow: 'hidden',
+    marginBottom: 6,
+    justifyContent: 'center'
+  },
+  barInner: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    backgroundColor: '#10b981'
+  },
+  barText: {
+    fontSize: 12,
+    color: '#111',
+    textAlign: 'center'
   }
 });

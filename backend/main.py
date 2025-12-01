@@ -237,7 +237,7 @@ def get_event_details(event_id: str, role: str, current_user=Depends(get_current
             raise HTTPException(status_code=400, detail="Task not found")
 
         event["delegate_contact_info"] = task.get("assigned_delegate", "")
-        event["organizer_contact_info"] = event.get("organizer_contact_info", "")
+        event["organizer_contact_info"] = task.get("organizer_contact_info") or event.get("organizer_contact_info", "")
         event["my_role"] = "volunteer"
         event["task_description"] = task.get("description", "")
         event["task_location"] = task.get("location", {})
@@ -263,7 +263,7 @@ def get_event_details(event_id: str, role: str, current_user=Depends(get_current
         for v in volunteers:
             v["_id"] = str(v.get("_id", ""))
         event["volunteers"] = volunteers
-        event["organizer_contact_info"] = event.get("organizer_contact_info", "")
+        event["organizer_contact_info"] = task.get("organizer_contact_info") or event.get("organizer_contact_info", "")
         event["my_role"] = "delegate"
         if delegate_doc:
             event["volunteer_join_code"] = delegate_doc.get("delegate_org_code", "")
@@ -644,12 +644,14 @@ def create_task(event_id: str, task: TaskCreate, current_user=Depends(get_curren
     task_dump = task.model_dump()
     task_dump['event_id'] = event_id
     task_dump['created_by'] = getattr(current_user, 'email', None)
+    task_dump['organizer_contact_info'] = task_dump.get('organizer_contact_info') or getattr(current_user, 'email', None) or ""
     task_dump['task_join_code'] = _generate_unique_task_code(db)  # unique code per task
     task_dump['created_at'] = datetime.utcnow()
     task_dump['updated_at'] = datetime.utcnow()
 
     result = db['event_tasks'].insert_one(task_dump)
     task_dump['id'] = str(result.inserted_id)
+    task_dump['volunteer_count'] = 0
     return TaskOut(**task_dump)
 
 
@@ -659,6 +661,8 @@ def get_tasks_for_event(event_id: str):
     tasks = list(db['event_tasks'].find({'event_id': event_id}))
     for t in tasks:
         t['id'] = str(t['_id'])
+        count = db['task_assignments'].count_documents({"activity_id": t['id']})
+        t['volunteer_count'] = count
     return [TaskOut(**t) for t in tasks]
 
 
@@ -689,6 +693,8 @@ def update_task(
 
     updated_task = db["event_tasks"].find_one({"_id": oid})
     updated_task["task_id"] = str(updated_task["_id"])
+    updated_task["id"] = str(updated_task["_id"])
+    updated_task["volunteer_count"] = db["task_assignments"].count_documents({"activity_id": str(updated_task["_id"])})
     return TaskOut(**updated_task)
 
 class DelegateRequest(BaseModel):
@@ -720,6 +726,7 @@ def assign_delegate(event_id: str, task_id: str, request: DelegateRequest, curre
     db['event_tasks'].update_one({'_id': oid}, {'$set': update_set})
     updated_task = db['event_tasks'].find_one({'_id': oid})
     updated_task['task_id'] = str(updated_task['_id'])
+    updated_task['id'] = str(updated_task['_id'])
 
     # Auto-assign volunteers who joined via this delegate/org to this task
     if delegate_doc and delegate_doc.get("delegate_org_code"):
@@ -746,6 +753,7 @@ def assign_delegate(event_id: str, task_id: str, request: DelegateRequest, curre
                     "assigned_at": now,
                 })
 
+    updated_task['volunteer_count'] = db['task_assignments'].count_documents({"activity_id": str(updated_task["_id"])})
     return TaskOut(**updated_task)
 
 @app.post("/tasks/join/{task_code}", response_model=TaskOut)
@@ -797,6 +805,7 @@ def join_task(task_code: str, current_user=Depends(get_current_user)):
         })
 
     task["id"] = task_id_str
+    task["volunteer_count"] = db["task_assignments"].count_documents({"activity_id": task_id_str})
     return TaskOut(**task)
 
 # ------------- Notification APIs -------------

@@ -124,6 +124,7 @@ class TaskBase(BaseModel):
     assigned_delegate: str
     assigned_delegate_org_code: Optional[str] = None
     assigned_delegate_org: Optional[str] = None
+    organizer_contact_info: Optional[str] = Field(default=None, alias="organizer_contact_info")
     task_join_code: Optional[str] = None # backend will generate the code
 
 class TaskInDB(TaskBase):
@@ -141,6 +142,7 @@ class TaskCreate(TaskBase):
 class TaskOut(TaskBase):
     id: Optional[str] = Field(default=None)
     event_id: str = Field(alias="event_id")
+    volunteer_count: Optional[int] = Field(default=None, alias="volunteer_count")
 
 # ------------------------------
 # Event Volunteers

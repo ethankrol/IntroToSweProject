@@ -87,11 +87,13 @@ export type TaskPayload = {
     max_volunteers?: number | null;
     assigned_delegate: string; // email
     task_join_code?: string;   // backend generates on create
+    organizer_contact_info?: string;
 };
 
 export type TaskResponse = TaskPayload & {
     id?: string;
     event_id: string;
+    volunteer_count?: number | null;
 };
 
 export type DelegateProfile = {
