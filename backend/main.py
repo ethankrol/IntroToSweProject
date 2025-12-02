@@ -778,6 +778,22 @@ def assign_delegate(event_id: str, task_id: str, request: DelegateRequest, curre
         update_set['assigned_delegate_org'] = delegate_doc.get("organization")
 
     db['event_tasks'].update_one({'_id': oid}, {'$set': update_set})
+
+    # NEW: ensure the assigned delegate is also in task_assignments
+    now = datetime.utcnow()
+    existing_delegate_assignment = db["task_assignments"].find_one({
+        "activity_id": str(oid),
+        "user_id": request.assigned_delegate,
+    })
+    if not existing_delegate_assignment:
+        db["task_assignments"].insert_one({
+            "event_id": event_id,
+            "activity_id": str(oid),
+            "user_id": request.assigned_delegate,
+            "assigned_by": getattr(current_user, "email", None) or "",
+            "assigned_at": now,
+        })
+
     updated_task = db['event_tasks'].find_one({'_id': oid})
     updated_task['task_id'] = str(updated_task['_id'])
     updated_task['id'] = str(updated_task['_id'])
