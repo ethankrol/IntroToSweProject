@@ -214,6 +214,7 @@ class VolunteerEventDetails(BaseModel):
     start_date: datetime = Field(alias="start_date")
     end_date: datetime = Field(alias="end_date")
     delegate_join_code: str = Field(alias="delegate_join_code")
+    delegate_org_code: Optional[str] = None
     delegate_contact_info: str
     organizer_contact_info: str
     my_role: str

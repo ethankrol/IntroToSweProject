@@ -43,6 +43,7 @@ export type OrganizerEventDetail = BaseEventDetail & {
 
 export type VolunteerEventDetail = BaseEventDetail & {
     delegate_join_code: string;
+    delegate_org_code?: string | null;
     delegate_contact_info: string;
     organizer_contact_info: string;
     my_role: string;
@@ -108,6 +109,10 @@ export type DelegateProfile = {
 
 export type VolunteerProfile = {
     email: string;
+    memberships: VolunteerMembership[];
+};
+
+export type VolunteerMembership = {
     organization?: string;
     delegate_org_code?: string;
     event_id?: string | null;

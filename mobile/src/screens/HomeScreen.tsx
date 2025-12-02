@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback} from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, Alert, FlatList, ActivityIndicator } from 'react-native';
 import { useNavigation, useFocusEffect} from '@react-navigation/native';
 import {
@@ -29,6 +29,14 @@ export default function HomeScreen() {
   const [profile, setProfile] = useState<DelegateProfile | null>(null);
   const [volProfile, setVolProfile] = useState<VolunteerProfile | null>(null);
   const [attachEventId, setAttachEventId] = useState('');
+  const membershipMap = useMemo(() => {
+    if (!volProfile?.memberships?.length) return {};
+    const map: Record<string, any> = {};
+    volProfile.memberships.forEach((m) => {
+      if (m.event_id) map[m.event_id] = m;
+    });
+    return map;
+  }, [volProfile]);
 
   const load = async (role: TabRole) => {
     try {
@@ -135,6 +143,16 @@ export default function HomeScreen() {
         <Text style={styles.date}>{new Date(item.start_date).toLocaleDateString()}</Text>
       </View>
       {item.location_name ? <Text style={styles.location}>{item.location_name}</Text> : null}
+      {tab === 'volunteer' ? (
+        <>
+          <Text style={styles.description}>
+            {new Date(item.start_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - {new Date(item.end_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </Text>
+          <Text style={styles.description}>
+            Group: {membershipMap[item._id ?? (item as any).id]?.organization || membershipMap[item._id ?? (item as any).id]?.delegate_org_code || 'N/A'}
+          </Text>
+        </>
+      ) : null}
       {item.description ? <Text style={styles.description}>{item.description}</Text> : null}
       <View style={styles.actions}>
         {tab === 'organizer' ? (
@@ -148,6 +166,8 @@ export default function HomeScreen() {
             (navigation as any).navigate('EventDetail', {
               eventId: item._id ?? (item as any).id,
               role: tab,
+              delegateOrgCode: tab === 'volunteer' ? membershipMap[item._id ?? (item as any).id]?.delegate_org_code : undefined,
+              membership: tab === 'volunteer' ? membershipMap[item._id ?? (item as any).id] : undefined,
             })
           }
         >
@@ -177,11 +197,11 @@ export default function HomeScreen() {
               <Text style={styles.primaryActionText}>Register as Delegate</Text>
             </TouchableOpacity>
           )
-        ) : !volProfile ? (
+        ) : (
           <TouchableOpacity onPress={openJoin} style={styles.primaryAction}>
             <Text style={styles.primaryActionText}>Join with Org Code</Text>
           </TouchableOpacity>
-        ) : null}
+        )}
       </View>
       {tab === 'delegate' && profile && (
         <View style={styles.profileCard}>
@@ -286,45 +306,36 @@ export default function HomeScreen() {
     )}
       {tab === 'volunteer' && volProfile && (
         <View style={styles.profileCard}>
-          <Text style={styles.modalTitle}>My Group</Text>
-          <Text style={styles.modalLabel}>Delegate</Text>
-          <Text style={[styles.profileValue, { fontWeight: '700' }]}>
-            {volProfile.delegate_name || volProfile.delegate_email || 'Unknown'}
-            {volProfile.delegate_name && volProfile.delegate_email ? ` (${volProfile.delegate_email})` : ''}
-          </Text>
-          <Text style={styles.modalLabel}>Organization</Text>
-          <Text style={styles.profileValue}>{volProfile.organization || 'N/A'}</Text>
-          <Text style={styles.modalLabel}>Org Code</Text>
-          <Text style={[styles.profileValue, { fontWeight: '700' }]}>{volProfile.delegate_org_code}</Text>
-          <Text style={styles.modalLabel}>Volunteers ({volProfile.volunteer_count})</Text>
-          {volProfile.volunteers.length === 0 ? (
-            <Text style={styles.profileValue}>None yet</Text>
+          <Text style={styles.modalTitle}>My Groups</Text>
+          {volProfile.memberships.length === 0 ? (
+            <Text style={styles.profileValue}>No groups joined yet.</Text>
           ) : (
-            <>
-              {volProfile.volunteers.map((v, idx) => (
-                <Text key={v.email || idx} style={styles.profileValue}>
-                  {v.name || v.email || 'Unknown'} {v.email && v.name ? `(${v.email})` : ''}
-                </Text>
-              ))}
-            </>
+            volProfile.memberships.map((m, idx) => (
+              <View key={(m.delegate_org_code || '') + idx} style={{ marginBottom: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.profileValue}>{m.organization || 'Unnamed organization'}</Text>
+                  <Text style={[styles.modalLabel, { marginTop: 4 }]}>{m.delegate_name || m.delegate_email || 'Unknown delegate'}</Text>
+                </View>
+                <TouchableOpacity
+                  style={[styles.primaryAction, { backgroundColor: '#2563eb' }]}
+                  onPress={() => {
+                    if (!m.event_id) {
+                      Alert.alert('No event linked', 'This org is not attached to an event yet.');
+                      return;
+                    }
+                    (navigation as any).navigate('EventDetail', {
+                      eventId: m.event_id,
+                      role: 'volunteer',
+                      delegateOrgCode: m.delegate_org_code,
+                      membership: m,
+                    });
+                  }}
+                >
+                  <Text style={styles.primaryActionText}>View Details</Text>
+                </TouchableOpacity>
+              </View>
+            ))
           )}
-          <TouchableOpacity
-            style={[styles.primaryAction, { marginTop: 8 }]}
-            onPress={async () => {
-              try {
-                setLoading(true);
-                await leaveVolunteerGroup();
-                setVolProfile(null);
-                Alert.alert('Left group', 'You have left the group.');
-              } catch (e: any) {
-                Alert.alert('Leave failed', e?.message ?? 'Unable to leave');
-              } finally {
-                setLoading(false);
-              }
-            }}
-          >
-            <Text style={styles.primaryActionText}>Leave Group</Text>
-          </TouchableOpacity>
         </View>
       )}
       {loading && <ActivityIndicator style={{ marginVertical: 12 }} />}

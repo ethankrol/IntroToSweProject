@@ -44,9 +44,11 @@ export async function fetchEvents(role: 'organizer' | 'delegate' | 'volunteer'):
     return await res.json();
 }
 
-export async function fetchEventDetails(eventId: string, role: 'organizer' | 'delegate' | 'volunteer'): Promise<EventDetail> {
+export async function fetchEventDetails(eventId: string, role: 'organizer' | 'delegate' | 'volunteer', delegateOrgCode?: string): Promise<EventDetail> {
     const headers = await authHeaders();
-    const res = await fetch(`${API_BASE_URL}/events/${eventId}?role=${role}`, { headers });
+    const query = new URLSearchParams({ role });
+    if (delegateOrgCode) query.append('delegate_org_code', delegateOrgCode);
+    const res = await fetch(`${API_BASE_URL}/events/${eventId}?${query.toString()}`, { headers });
     if (!res.ok) {
         const text = await res.text();
         throw new Error(`Failed to load event details: ${res.status} ${text}`);
@@ -210,11 +212,12 @@ export async function fetchVolunteerProfile(): Promise<VolunteerProfile> {
     return await res.json();
 }
 
-export async function leaveVolunteerGroup(): Promise<any> {
+export async function leaveVolunteerGroup(delegateOrgCode?: string): Promise<any> {
     const headers = await authHeaders();
     const res = await fetch(`${API_BASE_URL}/volunteer/leave`, {
         method: 'POST',
         headers,
+        body: JSON.stringify(delegateOrgCode ? { delegate_org_code: delegateOrgCode } : {}),
     });
     if (!res.ok) {
         const text = await res.text();

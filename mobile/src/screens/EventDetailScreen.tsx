@@ -2,13 +2,15 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert, TouchableOpacity, TextInput, Platform } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { fetchEventDetails, fetchTasks, createTask, assignDelegate, updateTask } from '../services/events';
-import { DelegateEventDetail, EventDetail, OrganizerEventDetail, TaskResponse, VolunteerEventDetail } from '../services/models/event_models';
+import { fetchEventDetails, fetchTasks, createTask, assignDelegate, updateTask, leaveVolunteerGroup } from '../services/events';
+import { DelegateEventDetail, EventDetail, OrganizerEventDetail, TaskResponse, VolunteerEventDetail, VolunteerMembership } from '../services/models/event_models';
 
 type RouteParams = {
   eventId?: string;
   event?: any; // fallback if navigation sends full event
   role?: 'organizer' | 'delegate' | 'volunteer';
+  delegateOrgCode?: string;
+  membership?: VolunteerMembership;
 };
 
 type DelegateOption = { value: string; label: string };
@@ -16,7 +18,7 @@ type DelegateOption = { value: string; label: string };
 export default function EventDetailScreen() {
   const route = useRoute();
   const navigation = useNavigation<any>();
-  const { eventId, event, role = 'volunteer' } = (route.params as RouteParams) || {};
+  const { eventId, event, role = 'volunteer', delegateOrgCode, membership } = (route.params as RouteParams) || {};
   const resolvedEventId = eventId || event?._id || event?.id;
 
   const formatDateLocal = (date: Date) => {
@@ -63,7 +65,7 @@ export default function EventDetailScreen() {
       try {
         setLoading(true);
         setWaitingAssignment(false);
-        const d = await fetchEventDetails(resolvedEventId, role);
+        const d = await fetchEventDetails(resolvedEventId, role, delegateOrgCode);
         setDetail(d);
         // Prefill delegate selection list and default coords
         if ('location' in d && d.location?.coordinates?.length === 2) {
@@ -111,7 +113,7 @@ export default function EventDetailScreen() {
       }
     };
     load();
-  }, [resolvedEventId, role]);
+  }, [resolvedEventId, role, delegateOrgCode]);
 
   const delegateOptions: DelegateOption[] = useMemo(() => {
     if (role !== 'organizer') return [];
@@ -289,6 +291,46 @@ export default function EventDetailScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
+      {role === 'volunteer' && membership ? (
+        <View style={styles.box}>
+          <Text style={[styles.boxLabel, { textAlign: 'center', fontWeight: '700', marginBottom: 8 }]}>My Group</Text>
+          <Text style={styles.boxValue}>
+            {membership.delegate_name || membership.delegate_email || 'Unknown delegate'}
+            {membership.delegate_name && membership.delegate_email ? ` (${membership.delegate_email})` : ''}
+          </Text>
+          <Text style={styles.boxLabel}>Organization</Text>
+          <Text style={styles.boxValue}>{membership.organization || 'N/A'}</Text>
+          <Text style={styles.boxLabel}>Org Code</Text>
+          <Text style={styles.code}>{membership.delegate_org_code}</Text>
+          <Text style={[styles.boxLabel, { marginTop: 8 }]}>Volunteers ({membership.volunteer_count})</Text>
+          {membership.volunteers?.length ? (
+            membership.volunteers.map((v, idx) => (
+              <Text key={v.email || idx} style={styles.boxValue}>
+                {v.name || v.email || 'Unknown'} {v.email && v.name ? `(${v.email})` : ''}
+              </Text>
+            ))
+          ) : (
+            <Text style={styles.boxValue}>None yet</Text>
+          )}
+          <TouchableOpacity
+            style={[styles.primaryButton, { marginTop: 10, backgroundColor: '#b91c1c' }]}
+            onPress={async () => {
+              try {
+                setTaskLoading(true);
+                await leaveVolunteerGroup(membership.delegate_org_code || undefined);
+                Alert.alert('Left group', 'You have left this group.');
+                navigation.goBack?.();
+              } catch (e: any) {
+                Alert.alert('Leave failed', e?.message ?? 'Unable to leave group');
+              } finally {
+                setTaskLoading(false);
+              }
+            }}
+          >
+            <Text style={styles.primaryText}>Leave Group</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
       <Text style={styles.title}>{base.name}</Text>
 
       <View style={styles.box}>
