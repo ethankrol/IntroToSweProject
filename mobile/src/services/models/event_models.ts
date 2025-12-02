@@ -53,6 +53,7 @@ export type VolunteerEventDetail = BaseEventDetail & {
         coordinates: number[];
     };
     task_location_name: string;
+    task_id?: string;
 };
 
 export type DelegateEventDetail = BaseEventDetail & {
@@ -86,7 +87,7 @@ export type TaskPayload = {
     start_time: string; // ISO
     end_time: string;   // ISO
     max_volunteers?: number | null;
-    assigned_delegate: string; // email
+    assigned_delegate?: string; // email
     task_join_code?: string;   // backend generates on create
     organizer_contact_info?: string;
 };

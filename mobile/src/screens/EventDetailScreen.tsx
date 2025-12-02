@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert, TouchableOpacity, TextInput, Platform } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { fetchEventDetails, fetchTasks, createTask, assignDelegate, updateTask, leaveVolunteerGroup } from '../services/events';
+import { fetchEventDetails, fetchTasks, createTask, assignDelegate, updateTask, leaveVolunteerGroup, unassignDelegate, removeDelegateFromEvent, leaveTask } from '../services/events';
 import { DelegateEventDetail, EventDetail, OrganizerEventDetail, TaskResponse, VolunteerEventDetail, VolunteerMembership } from '../services/models/event_models';
 
 type RouteParams = {
@@ -58,6 +58,7 @@ export default function EventDetailScreen() {
   const [showTaskDatePicker, setShowTaskDatePicker] = useState(false);
   const [showTaskStartPicker, setShowTaskStartPicker] = useState(false);
   const [showTaskEndPicker, setShowTaskEndPicker] = useState(false);
+  const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!resolvedEventId) return;
@@ -67,6 +68,9 @@ export default function EventDetailScreen() {
         setWaitingAssignment(false);
         const d = await fetchEventDetails(resolvedEventId, role, delegateOrgCode);
         setDetail(d);
+        if (role === 'volunteer' && (d as any).task_id) {
+          setCurrentTaskId((d as any).task_id);
+        }
         // Prefill delegate selection list and default coords
         if ('location' in d && d.location?.coordinates?.length === 2) {
           setTaskForm((prev) => ({
@@ -193,7 +197,6 @@ export default function EventDetailScreen() {
   const onSubmitTask = async () => {
     if (!resolvedEventId) return;
     if (!taskForm.name.trim()) return Alert.alert('Missing name', 'Task name is required.');
-    if (!taskForm.assignedDelegate.trim()) return Alert.alert('Missing delegate', 'Please select a delegate.');
     const lng = parseFloat(taskForm.lng);
     const lat = parseFloat(taskForm.lat);
     if (Number.isNaN(lng) || Number.isNaN(lat)) return Alert.alert('Invalid location', 'Enter valid longitude/latitude numbers.');
@@ -209,7 +212,7 @@ export default function EventDetailScreen() {
         start_time: start.toISOString(),
         end_time: end.toISOString(),
         max_volunteers: taskForm.maxVolunteers ? Number(taskForm.maxVolunteers) : undefined,
-        assigned_delegate: taskForm.assignedDelegate.trim(),
+        assigned_delegate: taskForm.assignedDelegate.trim() || undefined,
         organizer_contact_info: taskForm.organizerContact.trim() || undefined,
       };
       if (editingTaskId) {
@@ -248,6 +251,46 @@ export default function EventDetailScreen() {
     } finally {
       setTaskLoading(false);
     }
+  };
+
+  const onUnassignDelegate = async (taskId: string) => {
+    if (!resolvedEventId) return;
+    try {
+      setTaskLoading(true);
+      await unassignDelegate(resolvedEventId, taskId);
+      const refreshed = await fetchTasks(resolvedEventId);
+      setTasks(refreshed);
+    } catch (err: any) {
+      console.error(err);
+      Alert.alert('Error', err?.message ?? 'Failed to unassign delegate');
+    } finally {
+      setTaskLoading(false);
+    }
+  };
+
+  const onRemoveDelegate = async (delegateEmail: string) => {
+    if (!resolvedEventId) return;
+    Alert.alert('Remove delegate', `Remove ${delegateEmail} and their volunteers from this event?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Remove',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            setTaskLoading(true);
+            await removeDelegateFromEvent(resolvedEventId, delegateEmail);
+            const refreshed = await fetchEventDetails(resolvedEventId, role, delegateOrgCode);
+            setDetail(refreshed);
+            const refreshedTasks = await fetchTasks(resolvedEventId);
+            setTasks(refreshedTasks);
+          } catch (err: any) {
+            Alert.alert('Error', err?.message ?? 'Failed to remove delegate');
+          } finally {
+            setTaskLoading(false);
+          }
+        },
+      },
+    ]);
   };
 
   if (!resolvedEventId) {
@@ -317,9 +360,9 @@ export default function EventDetailScreen() {
             onPress={async () => {
               try {
                 setTaskLoading(true);
-                await leaveVolunteerGroup(membership.delegate_org_code || undefined);
+                await leaveVolunteerGroup(membership.delegate_org_code || undefined, membership.event_id || undefined);
                 Alert.alert('Left group', 'You have left this group.');
-                navigation.goBack?.();
+                navigation.navigate('HomeScreen' as never, { tab: 'volunteer', refresh: Date.now() } as never);
               } catch (e: any) {
                 Alert.alert('Leave failed', e?.message ?? 'Unable to leave group');
               } finally {
@@ -331,6 +374,44 @@ export default function EventDetailScreen() {
           </TouchableOpacity>
         </View>
       ) : null}
+      {role === 'volunteer' && !membership && (
+        <TouchableOpacity
+          style={[styles.primaryButton, { backgroundColor: '#b91c1c', marginBottom: 12 }]}
+          onPress={async () => {
+            // allow leaving task-only membership
+            try {
+              setTaskLoading(true);
+              let taskId = currentTaskId || (detail as any).task_id;
+              if (!taskId && resolvedEventId) {
+                // try refetching detail to obtain task id
+                try {
+                  const refreshed = await fetchEventDetails(resolvedEventId, role, delegateOrgCode);
+                  setDetail(refreshed);
+                  if ((refreshed as any).task_id) {
+                    taskId = (refreshed as any).task_id;
+                    setCurrentTaskId(taskId);
+                  }
+                } catch (e) {
+                  // ignore; will fall through to error below
+                }
+              }
+              if (!taskId) {
+                Alert.alert('Leave failed', 'No task id found.');
+                return;
+              }
+              await leaveTask(taskId);
+              Alert.alert('Left task', 'You have left this task.');
+              navigation.navigate('HomeScreen' as never, { tab: 'volunteer', refresh: Date.now() } as never);
+            } catch (e: any) {
+              Alert.alert('Leave failed', e?.message ?? 'Unable to leave task');
+            } finally {
+              setTaskLoading(false);
+            }
+          }}
+        >
+          <Text style={styles.primaryText}>Leave Task</Text>
+        </TouchableOpacity>
+      )}
       <Text style={styles.title}>{base.name}</Text>
 
       <View style={styles.box}>
@@ -367,6 +448,7 @@ export default function EventDetailScreen() {
           taskLoading={taskLoading}
           delegateOptions={delegateOptions}
           onAssignDelegate={onAssignDelegate}
+          onUnassignDelegate={onUnassignDelegate}
           taskForm={taskForm}
           setTaskForm={setTaskForm}
           onCreateTask={onSubmitTask}
@@ -387,6 +469,7 @@ export default function EventDetailScreen() {
           formatDateLocal={formatDateLocal}
           formatTime={formatTime}
           onPickLocation={openTaskLocationPicker}
+          onRemoveDelegate={onRemoveDelegate}
           editingTaskId={editingTaskId}
           onEditTask={onEditTask}
           onCancelEdit={onCancelEdit}
@@ -407,10 +490,12 @@ function VolunteerSection({ detail }: { detail: VolunteerEventDetail }) {
         <Text style={styles.boxLabel}>Organizer contact</Text>
         <Text style={styles.boxValue}>{detail.organizer_contact_info}</Text>
       </View>
-      <View style={styles.box}>
-        <Text style={styles.boxLabel}>Delegate contact</Text>
-        <Text style={styles.boxValue}>{detail.delegate_contact_info}</Text>
-      </View>
+      {detail.delegate_org_code ? (
+        <View style={styles.box}>
+          <Text style={styles.boxLabel}>Delegate contact</Text>
+          <Text style={styles.boxValue}>{detail.delegate_contact_info}</Text>
+        </View>
+      ) : null}
       <View style={styles.box}>
         <Text style={styles.boxLabel}>Task</Text>
         <Text style={styles.boxValue}>{detail.task_description}</Text>
@@ -464,6 +549,8 @@ type OrganizerSectionProps = {
   taskLoading: boolean;
   delegateOptions: DelegateOption[];
   onAssignDelegate: (taskId: string, delegateEmail: string) => void;
+  onUnassignDelegate: (taskId: string) => void;
+  onRemoveDelegate: (delegateEmail: string) => void;
   taskForm: any;
   setTaskForm: React.Dispatch<React.SetStateAction<any>>;
   onCreateTask: () => void;
@@ -495,6 +582,8 @@ function OrganizerSection({
   taskLoading,
   delegateOptions,
   onAssignDelegate,
+  onUnassignDelegate,
+  onRemoveDelegate,
   taskForm,
   setTaskForm,
   onCreateTask,
@@ -521,6 +610,22 @@ function OrganizerSection({
 }: OrganizerSectionProps) {
   return (
     <>
+      {Array.isArray(detail.delegates) && detail.delegates.length ? (
+        <View style={styles.box}>
+          <Text style={styles.boxLabel}>Delegates</Text>
+          {detail.delegates.map((d: any, idx: number) => (
+            <View key={d._id || idx} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+              <Text style={styles.boxValue}>{d.user_id || d.email || 'Unknown'}</Text>
+              <TouchableOpacity
+                style={[styles.assignButton, { backgroundColor: '#fee2e2', borderColor: '#f87171' }]}
+                onPress={() => onRemoveDelegate(d.user_id || d.email || '')}
+              >
+                <Text style={[styles.assignText, { color: '#b91c1c' }]}>Remove</Text>
+              </TouchableOpacity>
+            </View>
+          ))}
+        </View>
+      ) : null}
       <View style={styles.box}>
         <Text style={styles.boxLabel}>Delegate join code</Text>
         <Text style={styles.code}>{detail.delegate_join_code}</Text>
@@ -732,28 +837,35 @@ function OrganizerSection({
               </View>
               <Text style={styles.boxLabel}>Assigned delegate</Text>
               <Text style={styles.boxValue}>{t.assigned_delegate || 'Unassigned'}</Text>
-              <View style={{ flexDirection: 'row', marginTop: 6 }}>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
                 <TouchableOpacity
                   style={[styles.assignButton, { backgroundColor: '#bfdbfe', marginRight: 8 }]}
                   onPress={() => onEditTask(t)}
                 >
                   <Text style={[styles.assignText, { color: '#1d4ed8' }]}>Edit</Text>
                 </TouchableOpacity>
-              </View>
-              {delegateOptions.length ? (
-                <View style={{ marginTop: 8 }}>
-                  <Text style={styles.boxLabel}>Assign / change delegate</Text>
-                  {delegateOptions.map((opt) => (
+                {delegateOptions.length ? (
+                  delegateOptions.map((opt) => (
                     <TouchableOpacity
                       key={opt.value}
                       style={styles.assignButton}
                       onPress={() => onAssignDelegate(t.id || '', opt.value)}
                     >
-                      <Text style={styles.assignText}>{opt.label}</Text>
+                      <Text style={styles.assignText}>Assign {opt.label}</Text>
                     </TouchableOpacity>
-                  ))}
-                </View>
-              ) : null}
+                  ))
+                ) : (
+                  <Text style={styles.boxValue}>No delegates available</Text>
+                )}
+                {t.assigned_delegate ? (
+                  <TouchableOpacity
+                    style={[styles.assignButton, { backgroundColor: '#fee2e2', borderColor: '#f87171' }]}
+                    onPress={() => onUnassignDelegate(t.id || '')}
+                  >
+                    <Text style={[styles.assignText, { color: '#b91c1c' }]}>Unassign</Text>
+                  </TouchableOpacity>
+                ) : null}
+              </View>
             </View>
           ))
         )}
