@@ -248,7 +248,7 @@ def get_event_details(event_id: str, role: str, delegate_org_code: Optional[str]
         event["delegate_org_code"] = delegate_org_code or membership.get("delegate_org_code") if 'membership' in locals() else None
         event["task_description"] = task.get("description", "")
         event["task_location"] = task.get("location", {})
-        event["task_location_name"] = task.get("location_name", "")
+        event["task_location_name"] = str(task.get("location_name", ""))
         return VolunteerEventDetails(**event)
 
     if role == "delegate":
@@ -272,11 +272,10 @@ def get_event_details(event_id: str, role: str, delegate_org_code: Optional[str]
         event["volunteers"] = volunteers
         event["organizer_contact_info"] = task.get("organizer_contact_info") or event.get("organizer_contact_info", "")
         event["my_role"] = "delegate"
-        if delegate_doc:
-            event["volunteer_join_code"] = delegate_doc.get("delegate_org_code", "")
+        event["volunteer_join_code"] = task.get("task_join_code", "")
         event["task_description"] = task.get("description", "")
         event["task_location"] = task.get("location", {})
-        event["task_location_name"] = task.get("location_name", "")
+        event["task_location_name"] = str(task.get("location_name", ""))
         return DelegateEventDetails(**event)
 
     raise HTTPException(status_code=400, detail="Invalid role")
@@ -541,6 +540,27 @@ def join_via_delegate(delegate_org_code: str, current_user=Depends(get_current_u
             "joined_at": datetime.utcnow(),
         })
 
+    if event_id:
+        assigned_tasks = list(db["event_tasks"].find({
+            "event_id": event_id,
+            "$or": [
+                {"assigned_delegate": delegate_user_id},
+                {"assigned_delegate_org_code": code}
+            ]
+        }))
+        now = datetime.utcnow()
+        for t in assigned_tasks:
+            activity_id = str(t["_id"])
+            exists = db["task_assignments"].find_one({"activity_id": activity_id, "user_id": email})
+            if not exists:
+                db["task_assignments"].insert_one({
+                    "event_id": event_id,
+                    "activity_id": activity_id,
+                    "user_id": email,
+                    "assigned_by": delegate_user_id or getattr(current_user, "email", None) or "",
+                    "assigned_at": now
+                })
+
     try:
         oid = ObjectId(event_id)
         event_doc = db["events"].find_one({"_id": oid})
@@ -703,9 +723,37 @@ def create_task(event_id: str, task: TaskCreate, current_user=Depends(get_curren
     task_dump['created_at'] = datetime.utcnow()
     task_dump['updated_at'] = datetime.utcnow()
 
+    assigned_delegate = task_dump.get('assigned_delegate')
+    if assigned_delegate:
+        delegate_doc = db['event_volunteers'].find_one({
+            "event_id": event_id,
+            "user_id": assigned_delegate,
+            "role": "delegate",
+        })
+        if delegate_doc:
+            task_dump['assigned_delegate_org_code'] = delegate_doc.get("delegate_org_code")
+            task_dump['assigned_delegate_org'] = delegate_doc.get("organization")
+
     result = db['event_tasks'].insert_one(task_dump)
-    task_dump['id'] = str(result.inserted_id)
-    task_dump['volunteer_count'] = 0
+    task_id_str = str(result.inserted_id)
+
+    # Ensure the assigned delegate is also in task_assignments
+    if assigned_delegate:
+        existing_delegate_assignment = db["task_assignments"].find_one({
+            "activity_id": task_id_str,
+            "user_id": assigned_delegate,
+        })
+        if not existing_delegate_assignment:
+            db["task_assignments"].insert_one({
+                "event_id": event_id,
+                "activity_id": task_id_str,
+                "user_id": assigned_delegate,
+                "assigned_by": getattr(current_user, "email", None) or "",
+                "assigned_at": datetime.utcnow(),
+            })
+
+    task_dump['id'] = task_id_str
+    task_dump['volunteer_count'] = db['task_assignments'].count_documents({"activity_id": task_id_str})
     return TaskOut(**task_dump)
 
 
@@ -778,6 +826,21 @@ def assign_delegate(event_id: str, task_id: str, request: DelegateRequest, curre
         update_set['assigned_delegate_org'] = delegate_doc.get("organization")
 
     db['event_tasks'].update_one({'_id': oid}, {'$set': update_set})
+
+    now = datetime.utcnow()
+    existing_delegate_assignment = db["task_assignments"].find_one({
+        "activity_id": str(oid),
+        "user_id": request.assigned_delegate,
+    })
+    if not existing_delegate_assignment:
+        db["task_assignments"].insert_one({
+            "event_id": event_id,
+            "activity_id": str(oid),
+            "user_id": request.assigned_delegate,
+            "assigned_by": getattr(current_user, "email", None) or "",
+            "assigned_at": now,
+        })
+
     updated_task = db['event_tasks'].find_one({'_id': oid})
     updated_task['task_id'] = str(updated_task['_id'])
     updated_task['id'] = str(updated_task['_id'])
