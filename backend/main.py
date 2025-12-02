@@ -21,6 +21,7 @@ from pydantic import EmailStr
 from app.config import settings
 from app.email_service import send_password_reset, send_email
 import re
+from event.EventMessages import NotificationManager
 
 app = FastAPI(lifespan=lifespan)
 
@@ -166,17 +167,24 @@ def upsert_event(event: EventUpsert, current_user=Depends(get_current_user)):
     now = datetime.utcnow()
 
     doc: Dict = {}
+    changed_fields = {}
+    old_doc = None
     if payload.get('_id'):
         try:
             oid = ObjectId(payload['_id'])
         except Exception:
             raise HTTPException(status_code=400, detail='Invalid event id')
+        old_doc = db['events'].find_one({'_id': oid})
         payload.pop('_id', None)
         payload['updated_at'] = now
         res = db['events'].update_one({'_id': oid}, {'$set': payload})
         if res.matched_count == 0:
             raise HTTPException(status_code=404, detail='Event not found')
         doc = db['events'].find_one({'_id': oid}) or {}
+        if old_doc:
+            for field in ['time', 'address', 'requirements', 'attendance']:
+                if field in payload and payload[field] != old_doc.get(field):
+                    changed_fields[field] = {'old': old_doc.get(field), 'new': payload[field]}
     else:
         payload['created_by'] = getattr(current_user, 'email', None) or (
             current_user.get('email') if isinstance(current_user, dict) else None
@@ -191,6 +199,23 @@ def upsert_event(event: EventUpsert, current_user=Depends(get_current_user)):
 
     if doc.get('_id'):
         doc['_id'] = str(doc['_id'])
+    # === Notification logic ===
+    # Get volunteers for this event
+    event_id = doc.get('_id')
+    volunteers = [v['user_id'] for v in db['event_volunteers'].find({'event_id': event_id, 'role': 'volunteer'})]
+
+    # Send notifications for each change
+    if 'time' in changed_fields:
+        NotificationManager.send_time_change(volunteers, doc, changed_fields['time']['old'])
+    if 'address' in changed_fields:
+        NotificationManager.send_address_change(volunteers, doc, changed_fields['address']['old'])
+    if 'requirements' in changed_fields:
+        NotificationManager.send_requirements(volunteers, doc, "Requirements updated.")
+    if 'attendance' in changed_fields:
+        NotificationManager.send_attendance_change(volunteers, doc, "Attendance changed.")
+    # General tip for any change
+    if changed_fields:
+        NotificationManager.send_general_tip(volunteers, doc, "Event details updated.")
     return EventOut.model_validate(doc)
 
 

@@ -22,27 +22,25 @@ export default function SetPasswordScreen() {
   const [loading, setLoading] = useState(false);
 
   const handleDone = async () => {
-    if (!token) {
-      Alert.alert('Error', 'Please enter your reset token');
-      return;
-    }
-    if (!newPassword || !confirmPassword) {
-      Alert.alert('Error', 'Please fill in all fields');
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      Alert.alert('Error', 'Passwords do not match');
-      return;
-    }
-    if (newPassword.length < 8) {
-      Alert.alert('Error', 'Password must be at least 8 characters');
-      return;
-    }
-
     navigation.navigate('PasswordResetConfirmationScreen');
+  if (!token) {
+    Alert.alert('Error', 'Please enter your reset token');
+    return;
+  }
+  if (!newPassword || !confirmPassword) {
+    Alert.alert('Error', 'Please fill in all fields');
+    return;
+  }
+  if (newPassword !== confirmPassword) {
+    Alert.alert('Error', 'Passwords do not match');
+    return;
+  }
+  if (newPassword.length < 8) {
+    Alert.alert('Error', 'Password must be at least 8 characters');
+    return;
+  }
 
-
-    setLoading(true);
+  setLoading(true);
   try {
     const response = await fetch(`${API_BASE_URL}/reset`, {
       method: 'POST',
@@ -62,7 +60,7 @@ export default function SetPasswordScreen() {
   } finally {
     setLoading(false);
   }
-  };
+};
 
   const handleCancel = () => {
     Alert.alert(

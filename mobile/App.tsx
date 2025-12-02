@@ -64,12 +64,12 @@ export default function App() {
         <Stack.Screen name="Login" options={{ headerShown: false }}>
           {({ navigation }) => (
             <LoginScreen
-              onValidLogin={() => navigation.replace("Home")}
+              onValidLogin={() => navigation.replace("HomeScreen")}
               //onValidLogin={() => navigation.replace("Events")}
             />
           )}
         </Stack.Screen>
-        <Stack.Screen name="Home" component = {HomeScreen} />
+        <Stack.Screen name="HomeScreen" component = {HomeScreen} />
         <Stack.Screen name="Events" component={EventsScreen} options={{ title: 'Events' }} />
         <Stack.Screen name="EventDetail" component={EventDetailScreen} options={{ title: 'Event Details' }} />
         <Stack.Screen
@@ -89,6 +89,16 @@ export default function App() {
           name="LocationPicker"
           component={LocationPickerScreen}
           options={{ title: "Choose Location" }}
+        />
+        <Stack.Screen
+          name="SetPasswordScreen"
+          component={SetPasswordScreen}
+          options={{ title: "Set New Password" }}
+        />
+        <Stack.Screen
+          name="PasswordResetConfirmationScreen"
+          component={PasswordResetConfirmationScreen}
+          options={{ title: "Password Reset Confirmation" }}
         />
       </Stack.Navigator>
     </NavigationContainer>

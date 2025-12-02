@@ -54,7 +54,7 @@ export default function EventsScreen() {
         {/* @ts-ignore - navigation typing is generic here, passing params dynamically */}
         <TouchableOpacity
           style={[styles.editButton, { marginLeft: 8, backgroundColor: '#4b5563' }]}
-          onPress={() => (navigation as any).navigate('EventDetail', { eventId: item._id ?? item.id, role: tab })}
+          onPress={() => (navigation as any).navigate('EventDetail', { eventId: item._id, role: tab })}
         >
           <Text style={styles.editText}>Details</Text>
         </TouchableOpacity>
