@@ -1,6 +1,7 @@
 import * as React from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import {Button, Alert} from 'react-native';
 
 import LoginScreen from "./src/screens/LoginScreen";
 import EventsScreen from "./src/screens/EventsScreen";
@@ -11,6 +12,7 @@ import ResetPasswordScreen from "./src/screens/ResetPasswordScreen";
 import LocationPickerScreen from "./src/screens/LocationPickerScreen";
 import SetPasswordScreen from './src/screens/SetPasswordScreen';
 import PasswordResetConfirmationScreen from "./src/screens/PasswordResetConfirmationScreen";
+import { deleteCookie } from './src/services/cookie';
 
 type Role = "admin" | "volunteer";
 
@@ -64,12 +66,31 @@ export default function App() {
         <Stack.Screen name="Login" options={{ headerShown: false }}>
           {({ navigation }) => (
             <LoginScreen
-              onValidLogin={() => navigation.replace("Home")}
+              onValidLogin={() => navigation.replace("HomeScreen")}
               //onValidLogin={() => navigation.replace("Events")}
             />
           )}
         </Stack.Screen>
-        <Stack.Screen name="Home" component = {HomeScreen} />
+        <Stack.Screen name="HomeScreen" component = {HomeScreen} options={({navigation}) => ({
+          headerRight: () => (
+            <Button
+              onPress={async () =>{
+                try {
+                  await deleteCookie('auth_token');
+                  navigation.reset({
+                    index:  0,
+                    routes: [{name: 'Login'}],
+                  });
+                }
+                catch (e) {
+                  Alert.alert("Logout failed")
+                }
+              }}
+              title="Logout"
+              color="#007AFF"
+            />
+          ),
+        })}/>
         <Stack.Screen name="Events" component={EventsScreen} options={{ title: 'Events' }} />
         <Stack.Screen name="EventDetail" component={EventDetailScreen} options={{ title: 'Event Details' }} />
         <Stack.Screen

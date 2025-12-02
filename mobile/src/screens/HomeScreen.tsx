@@ -12,6 +12,7 @@ import {
   removeVolunteer,
   leaveDelegateEvent,
 } from '../services/events';
+import {deleteCookie} from '../services/cookie' 
 import { EventResponse, DelegateProfile, VolunteerProfile } from '../services/models/event_models';
 
 type TabRole = 'organizer' | 'delegate' | 'volunteer';
@@ -62,7 +63,6 @@ export default function HomeScreen() {
 
   // Gonna add a feature here for reloading the screen once an event has been created
   
-
   useEffect(() => { load(tab); }, [tab]);
   useEffect(() => {
     const loadProfile = async () => {
@@ -100,6 +100,24 @@ export default function HomeScreen() {
     setOrgName('');
     setDelegateEventId('');
     setIssuedCode(null);
+  };
+
+  const onLogout = async () =>{
+    try{
+      setLoading(true);
+      await deleteCookie('auth_token');
+
+      (navigation as any).reset({
+        index: 0,
+        routes: [{name: 'Login'}]
+      });
+    }
+    catch (e) {
+    Alert.alert('Logout failed');
+    }
+    finally{
+      setLoading(false);
+    }
   };
 
   const onJoinConfirm = async () => {
@@ -176,7 +194,6 @@ export default function HomeScreen() {
       </View>
     </View>
   );
-
   return (
     <View style={styles.container}>
       <View style={styles.navbar}>
