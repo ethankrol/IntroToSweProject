@@ -122,6 +122,9 @@ class TaskBase(BaseModel):
     end_time: datetime = Field(alias="end_time")
     max_volunteers: Optional[int] = Field(default=None, alias="max_volunteers")
     assigned_delegate: str
+    assigned_delegate_org_code: Optional[str] = None
+    assigned_delegate_org: Optional[str] = None
+    organizer_contact_info: Optional[str] = Field(default=None, alias="organizer_contact_info")
     task_join_code: Optional[str] = None # backend will generate the code
 
 class TaskInDB(TaskBase):
@@ -139,6 +142,7 @@ class TaskCreate(TaskBase):
 class TaskOut(TaskBase):
     id: Optional[str] = Field(default=None)
     event_id: str = Field(alias="event_id")
+    volunteer_count: Optional[int] = Field(default=None, alias="volunteer_count")
 
 # ------------------------------
 # Event Volunteers
@@ -151,6 +155,9 @@ class EventVolunteerInDB(BaseModel):
     event_id: str = Field(alias="event_id")
     user_id: str = Field(alias="user_id")  # store email string
     role: Literal["delegate", "volunteer"]
+    organization: Optional[str] = Field(default=None, alias="organization")
+    delegate_org_code: Optional[str] = Field(default=None, alias="delegate_org_code")
+    delegate_user_id: Optional[str] = Field(default=None, alias="delegate_user_id")  # for volunteers, track which delegate/org invited them
     joined_at: datetime = Field(alias="joined_at")
 
 class EventVolunteerOut(BaseModel):
@@ -158,6 +165,9 @@ class EventVolunteerOut(BaseModel):
     event_id: str = Field(alias="event_id")
     user_id: str = Field(alias="user_id")
     role: Literal["delegate", "volunteer"]
+    organization: Optional[str] = Field(default=None, alias="organization")
+    delegate_org_code: Optional[str] = Field(default=None, alias="delegate_org_code")
+    delegate_user_id: Optional[str] = Field(default=None, alias="delegate_user_id")
     joined_at: datetime = Field(alias="joined_at")
 
 # ------------------------------
@@ -204,6 +214,7 @@ class VolunteerEventDetails(BaseModel):
     start_date: datetime = Field(alias="start_date")
     end_date: datetime = Field(alias="end_date")
     delegate_join_code: str = Field(alias="delegate_join_code")
+    delegate_org_code: Optional[str] = None
     delegate_contact_info: str
     organizer_contact_info: str
     my_role: str
@@ -219,7 +230,7 @@ class DelegateEventDetails(BaseModel):
     location_name: Optional[str] = Field(default=None, alias="location_name")
     start_date: datetime = Field(alias="start_date")
     end_date: datetime = Field(alias="end_date")
-    volunteer_join_code: str = Field(alias="volunteer_join_code")
+    volunteer_join_code: str = Field(alias="volunteer_join_code")  # delegate/org join code
     total_attendees: Optional[int] # We will use this for computing total attendees just for this delegate's task
     volunteers: Optional[List] # This will return all of the volunteers 
     organizer_contact_info: str
