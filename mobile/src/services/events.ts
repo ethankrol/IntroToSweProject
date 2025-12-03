@@ -44,6 +44,17 @@ export async function fetchEvents(role: 'organizer' | 'delegate' | 'volunteer'):
     return await res.json();
 }
 
+// Admin: fetch all events if current user has admin privileges
+export async function fetchAdminEvents(): Promise<EventResponse[]> {
+    const headers = await authHeaders();
+    const res = await fetch(`${API_BASE_URL}/admin/events`, { headers });
+    if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Failed to load admin events: ${res.status} ${text}`);
+    }
+    return await res.json();
+}
+
 export async function fetchEventDetails(eventId: string, role: 'organizer' | 'delegate' | 'volunteer', delegateOrgCode?: string): Promise<EventDetail> {
     const headers = await authHeaders();
     const query = new URLSearchParams({ role });
