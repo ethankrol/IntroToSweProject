@@ -1383,7 +1383,7 @@ def mark_notification_read(notification_id: str, request: Request, current_user=
     return {'ok': True}
 
 
-# === Dev test endpoint (add this) ===
+# === Dev test endpoint ===
 class DevTestEmailIn(BaseModel):
     to: EmailStr
 
@@ -1391,3 +1391,27 @@ class DevTestEmailIn(BaseModel):
 def dev_test_email(payload: DevTestEmailIn):
     ok, err = send_email(payload.to, "Test email", "This is a test from /dev/test-email")
     return {"ok": ok, "error": err}
+
+# Admin event endpoint: (Added by Ethan Krol)
+@app.get('/admin/events', response_model = List[EventOut])
+def get_admin_events(current_user = Depends(get_current_user)):
+    """List all events for an admin viewer"""
+    db = app.db
+    email = getattr(current_user, 'email', None)
+    if not email:
+        raise HTTPException(status_code=500, detail='Missing user email')
+    # We don't need to check the role this time. This will only get called for admin users. But we should still check in db if they have privileges.
+    admin_user = db['users'].find_one({'email': email})
+    user_is_admin = admin_user.get('admin', False)
+    #print(user_is_admin)
+    if not user_is_admin:
+        raise HTTPException(status_code=401, detail='User does not have admin privileges')
+    
+    cursor = db['events'].find()
+    results = []
+    for doc in cursor:
+        if doc.get('_id'):
+            doc['_id'] = str(doc['_id'])
+        results.append(EventOut.model_validate(doc))
+    return results
+
