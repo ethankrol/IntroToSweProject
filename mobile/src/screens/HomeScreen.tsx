@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, Alert, FlatList, ActivityIndicator } from 'react-native';
-import { useNavigation, useFocusEffect} from '@react-navigation/native';
+import { useNavigation, useFocusEffect, useRoute} from '@react-navigation/native';
 import {
   fetchEvents,
   registerDelegate,
@@ -11,6 +11,7 @@ import {
   leaveVolunteerGroup,
   removeVolunteer,
   leaveDelegateEvent,
+  joinTask,
 } from '../services/events';
 import {deleteCookie} from '../services/cookie' 
 import { EventResponse, DelegateProfile, VolunteerProfile } from '../services/models/event_models';
@@ -19,6 +20,7 @@ type TabRole = 'organizer' | 'delegate' | 'volunteer';
 
 export default function HomeScreen() {
   const navigation = useNavigation<any>();
+  const route = useRoute<any>();
   const [tab, setTab] = useState<TabRole>('volunteer');
   const [events, setEvents] = useState<EventResponse[]>([]);
   const [loading, setLoading] = useState(false);
@@ -29,6 +31,7 @@ export default function HomeScreen() {
   const [issuedCode, setIssuedCode] = useState<string | null>(null);
   const [profile, setProfile] = useState<DelegateProfile | null>(null);
   const [volProfile, setVolProfile] = useState<VolunteerProfile | null>(null);
+  const [taskJoinCode, setTaskJoinCode] = useState('');
   const [attachEventId, setAttachEventId] = useState('');
   const membershipMap = useMemo(() => {
     if (!volProfile?.memberships?.length) return {};
@@ -44,6 +47,18 @@ export default function HomeScreen() {
       setLoading(true);
       const data = await fetchEvents(role);
       setEvents(data);
+      if (role === 'delegate') {
+        try {
+          const prof = await fetchDelegateProfile();
+          setProfile(prof);
+        } catch {}
+      }
+      if (role === 'volunteer') {
+        try {
+          const vp = await fetchVolunteerProfile();
+          setVolProfile(vp);
+        } catch {}
+      }
     } catch (e: any) {
       Alert.alert('Load failed', e.message || 'Unable to fetch events');
     } finally {
@@ -54,42 +69,28 @@ export default function HomeScreen() {
   useFocusEffect(
     useCallback(() => {
       load(tab);
-
-      return () => {
-        console.log("Test for reloading events on navigation change");
-      };
+      return () => {};
     }, [tab])
   );
 
   // Gonna add a feature here for reloading the screen once an event has been created
   
-  useEffect(() => { load(tab); }, [tab]);
   useEffect(() => {
-    const loadProfile = async () => {
-      if (tab !== 'delegate') return;
-      try {
-        const prof = await fetchDelegateProfile();
-        setProfile(prof);
-      } catch (e) {
-        // ignore if not a delegate yet
-      }
-    };
-    loadProfile();
-  }, [tab]);
-
+    const refreshKey = (route.params as any)?.refresh || 0;
+    load(tab);
+    // Also refetch volunteer profile specifically when refresh changes
+    if (tab === 'volunteer') {
+      fetchVolunteerProfile()
+        .then(setVolProfile)
+        .catch(() => setVolProfile({ email: '', memberships: [] } as any));
+    }
+  }, [tab, route.params]);
   useEffect(() => {
-    const loadVolProfile = async () => {
-      if (tab !== 'volunteer') return;
-      try {
-        const prof = await fetchVolunteerProfile();
-        setVolProfile(prof);
-      } catch (e) {
-        // ignore if not joined yet
-      }
-    };
-    loadVolProfile();
-  }, [tab]);
-
+    const unsubscribe = navigation.addListener('focus', () => {
+      load(tab);
+    });
+    return unsubscribe;
+  }, [navigation, tab]);
   const onCreate = () => {
     navigation.navigate('EditEvent' as never);
   };
@@ -321,10 +322,47 @@ export default function HomeScreen() {
         )}
       </View>
     )}
-      {tab === 'volunteer' && volProfile && (
+      {tab === 'volunteer' && (
         <View style={styles.profileCard}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+            <TextInput
+              placeholder="Volunteer join code (from task)"
+              value={taskJoinCode}
+              onChangeText={setTaskJoinCode}
+              style={[styles.modalInput, { flex: 1, marginRight: 8 }]}
+              autoCapitalize="characters"
+            />
+            <TouchableOpacity
+              style={[styles.primaryAction, { backgroundColor: '#2563eb' }]}
+              onPress={async () => {
+                if (!taskJoinCode.trim()) {
+                  Alert.alert('Join failed', 'Enter a task code.');
+                  return;
+                }
+                try {
+                  setLoading(true);
+                  await joinTask(taskJoinCode.trim());
+                  Alert.alert('Joined', 'Task joined successfully.');
+                  setTaskJoinCode('');
+                  // Refresh volunteer profile to reflect any changes
+                  try {
+                    const vp = await fetchVolunteerProfile();
+                    setVolProfile(vp);
+                  } catch {
+                    setVolProfile({ email: '', memberships: [] } as any);
+                  }
+                } catch (e: any) {
+                  Alert.alert('Join failed', e?.message ?? 'Unable to join task');
+                } finally {
+                  setLoading(false);
+                }
+              }}
+            >
+              <Text style={styles.primaryActionText}>Join Task</Text>
+            </TouchableOpacity>
+          </View>
           <Text style={styles.modalTitle}>My Groups</Text>
-          {volProfile.memberships.length === 0 ? (
+          {!volProfile || volProfile.memberships.length === 0 ? (
             <Text style={styles.profileValue}>No groups joined yet.</Text>
           ) : (
             volProfile.memberships.map((m, idx) => (

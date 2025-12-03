@@ -71,26 +71,31 @@ export default function App() {
             />
           )}
         </Stack.Screen>
-        <Stack.Screen name="HomeScreen" component = {HomeScreen} options={({navigation}) => ({
-          headerRight: () => (
-            <Button
-              onPress={async () =>{
-                try {
-                  await deleteCookie('auth_token');
-                  navigation.reset({
-                    index:  0,
-                    routes: [{name: 'Login'}],
-                  });
-                }
-                catch (e) {
-                  Alert.alert("Logout failed")
-                }
-              }}
-              title="Logout"
-              color="#007AFF"
-            />
-          ),
-        })}/>
+        <Stack.Screen
+          name="HomeScreen"
+          component={HomeScreen}
+          options={({ navigation }) => ({
+            title: "GatorGather",
+            headerRight: () => (
+              <Button
+                onPress={async () => {
+                  try {
+                    await deleteCookie('auth_token');
+                    navigation.reset({
+                      index: 0,
+                      routes: [{ name: 'Login' }],
+                    });
+                  }
+                  catch (e) {
+                    Alert.alert("Logout failed");
+                  }
+                }}
+                title="Logout"
+                color="#007AFF"
+              />
+            ),
+          })}
+        />
         <Stack.Screen name="Events" component={EventsScreen} options={{ title: 'Events' }} />
         <Stack.Screen name="EventDetail" component={EventDetailScreen} options={{ title: 'Event Details' }} />
         <Stack.Screen
