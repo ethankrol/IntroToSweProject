@@ -70,7 +70,7 @@ export default function App() {
               //onValidLogin={() => navigation.replace("Events")}
             />
           )}
-        </Stack.Screen>
+        </Stack.Screen
         <Stack.Screen
           name="HomeScreen"
           component={HomeScreen}
@@ -115,6 +115,16 @@ export default function App() {
           name="LocationPicker"
           component={LocationPickerScreen}
           options={{ title: "Choose Location" }}
+        />
+        <Stack.Screen
+          name="SetPasswordScreen"
+          component={SetPasswordScreen}
+          options={{ title: "Set New Password" }}
+        />
+        <Stack.Screen
+          name="PasswordResetConfirmationScreen"
+          component={PasswordResetConfirmationScreen}
+          options={{ title: "Password Reset Confirmation" }}
         />
       </Stack.Navigator>
     </NavigationContainer>
