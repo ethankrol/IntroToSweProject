@@ -136,7 +136,7 @@ In the file **`mobile/src/config.ts`**, you must set the `API_BASE_URL` variable
 // - iOS simulator can often reach your Mac at [http://127.0.0.1:8000](http://127.0.0.1:8000)
 // - Android emulator often needs [http://10.0.2.2:8000](http://10.0.2.2:8000)
 // - Physical devices need your machine's LAN IP, e.g. [http://192.168.1.10:8000](http://192.168.1.10:8000)
-export const API_BASE_URL = "[http://00](http://00).00.00.00:8000"; // Update with your actual IP address
+export const API_BASE_URL = "00.00.00.00:8000"; // Update with your actual IP address
 ```
 
 #### c. Run the Frontend App
