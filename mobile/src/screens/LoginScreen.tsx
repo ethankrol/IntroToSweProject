@@ -111,7 +111,12 @@ export default function LoginScreen({ onValidLogin }: Props) {
           first_name: firstName.trim(),
           last_name: lastName.trim(),
         });
+
+        // Ethan Krol - added fix to log user in after sign up. Was getting issue where a cached user would be logged in using existing cookie info or no login info would be passed
+        const result = await login(email.trim(), password);
+        await setCookie('auth_token', result.access_token);
         Alert.alert("Success", "Account created.");
+
         onValidLogin?.();
       } catch (e: any) {
         Alert.alert("Sign up failed", e?.message ?? "Please try again.");

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, Alert, FlatList, ActivityIndicator } from 'react-native';
-import { useNavigation, useFocusEffect} from '@react-navigation/native';
+import { useNavigation, useFocusEffect, useRoute} from '@react-navigation/native';
 import {
   fetchEvents,
   registerDelegate,
@@ -11,14 +11,19 @@ import {
   leaveVolunteerGroup,
   removeVolunteer,
   leaveDelegateEvent,
+  joinTask,
+  fetchAdminEvents,
 } from '../services/events';
+import {deleteCookie} from '../services/cookie' 
 import { EventResponse, DelegateProfile, VolunteerProfile } from '../services/models/event_models';
 
-type TabRole = 'organizer' | 'delegate' | 'volunteer';
+type TabRole = 'organizer' | 'delegate' | 'volunteer' | 'admin';
 
 export default function HomeScreen() {
   const navigation = useNavigation<any>();
+  const route = useRoute<any>();
   const [tab, setTab] = useState<TabRole>('volunteer');
+  const [isAdminAvailable, setIsAdminAvailable] = useState<boolean | null>(null);
   const [events, setEvents] = useState<EventResponse[]>([]);
   const [loading, setLoading] = useState(false);
   const [joinModalVisible, setJoinModalVisible] = useState(false);
@@ -28,6 +33,7 @@ export default function HomeScreen() {
   const [issuedCode, setIssuedCode] = useState<string | null>(null);
   const [profile, setProfile] = useState<DelegateProfile | null>(null);
   const [volProfile, setVolProfile] = useState<VolunteerProfile | null>(null);
+  const [taskJoinCode, setTaskJoinCode] = useState('');
   const [attachEventId, setAttachEventId] = useState('');
   const membershipMap = useMemo(() => {
     if (!volProfile?.memberships?.length) return {};
@@ -41,8 +47,32 @@ export default function HomeScreen() {
   const load = async (role: TabRole) => {
     try {
       setLoading(true);
-      const data = await fetchEvents(role);
+      let data: EventResponse[] = [];
+      if (role === 'admin') {
+        try {
+          data = await fetchAdminEvents();
+          setIsAdminAvailable(true);
+        } catch (e: any) {
+          // If admin fetch fails (401/403), mark admin unavailable and fall back
+          setIsAdminAvailable(false);
+          throw e;
+        }
+      } else {
+        data = await fetchEvents(role);
+      }
       setEvents(data);
+      if (role === 'delegate') {
+        try {
+          const prof = await fetchDelegateProfile();
+          setProfile(prof);
+        } catch {}
+      }
+      if (role === 'volunteer') {
+        try {
+          const vp = await fetchVolunteerProfile();
+          setVolProfile(vp);
+        } catch {}
+      }
     } catch (e: any) {
       Alert.alert('Load failed', e.message || 'Unable to fetch events');
     } finally {
@@ -53,43 +83,48 @@ export default function HomeScreen() {
   useFocusEffect(
     useCallback(() => {
       load(tab);
-
-      return () => {
-        console.log("Test for reloading events on navigation change");
-      };
+      return () => {};
     }, [tab])
   );
 
   // Gonna add a feature here for reloading the screen once an event has been created
   
-
-  useEffect(() => { load(tab); }, [tab]);
   useEffect(() => {
-    const loadProfile = async () => {
-      if (tab !== 'delegate') return;
-      try {
-        const prof = await fetchDelegateProfile();
-        setProfile(prof);
-      } catch (e) {
-        // ignore if not a delegate yet
-      }
-    };
-    loadProfile();
-  }, [tab]);
+    const refreshKey = (route.params as any)?.refresh || 0;
+    load(tab);
+    // Also refetch volunteer profile specifically when refresh changes
+    if (tab === 'volunteer') {
+      fetchVolunteerProfile()
+        .then(setVolProfile)
+        .catch(() => setVolProfile({ email: '', memberships: [] } as any));
+    }
+  }, [tab, route.params]);
 
+  // First try admin endpoint, if it doesn't work we switch to normal mode. Admin endpoint checks if current user is an admin.
   useEffect(() => {
-    const loadVolProfile = async () => {
-      if (tab !== 'volunteer') return;
+    let cancelled = false;
+    (async () => {
       try {
-        const prof = await fetchVolunteerProfile();
-        setVolProfile(prof);
-      } catch (e) {
-        // ignore if not joined yet
+        const data = await fetchAdminEvents();
+        if (!cancelled) {
+          setIsAdminAvailable(true);
+          setTab('admin');
+          setEvents(data);
+        }
+      } catch {
+        if (!cancelled) setIsAdminAvailable(false);
       }
+    })();
+    return () => {
+      cancelled = true;
     };
-    loadVolProfile();
-  }, [tab]);
-
+  }, []);
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      load(tab);
+    });
+    return unsubscribe;
+  }, [navigation, tab]);
   const onCreate = () => {
     navigation.navigate('EditEvent' as never);
   };
@@ -100,6 +135,24 @@ export default function HomeScreen() {
     setOrgName('');
     setDelegateEventId('');
     setIssuedCode(null);
+  };
+
+  const onLogout = async () =>{
+    try{
+      setLoading(true);
+      await deleteCookie('auth_token');
+
+      (navigation as any).reset({
+        index: 0,
+        routes: [{name: 'Login'}]
+      });
+    }
+    catch (e) {
+    Alert.alert('Logout failed');
+    }
+    finally{
+      setLoading(false);
+    }
   };
 
   const onJoinConfirm = async () => {
@@ -155,32 +208,36 @@ export default function HomeScreen() {
       ) : null}
       {item.description ? <Text style={styles.description}>{item.description}</Text> : null}
       <View style={styles.actions}>
-        {tab === 'organizer' ? (
+        {(tab === 'organizer' || tab === 'admin') && (
           <TouchableOpacity style={styles.editButton} onPress={() => navigation.navigate('EditEvent' as never, { event: item } as never)}>
             <Text style={styles.editText}>Edit</Text>
           </TouchableOpacity>
-        ) : null}
-        <TouchableOpacity
-          style={[styles.editButton, { marginLeft: 8, backgroundColor: '#4b5563' }]}
-          onPress={() =>
-            (navigation as any).navigate('EventDetail', {
-              eventId: item._id ?? (item as any).id,
-              role: tab,
-              delegateOrgCode: tab === 'volunteer' ? membershipMap[item._id ?? (item as any).id]?.delegate_org_code : undefined,
-              membership: tab === 'volunteer' ? membershipMap[item._id ?? (item as any).id] : undefined,
-            })
-          }
-        >
-          <Text style={styles.editText}>Details</Text>
-        </TouchableOpacity>
+        )}
+        {tab !== 'admin' && (
+          <TouchableOpacity
+            style={[styles.editButton, { marginLeft: 8, backgroundColor: '#4b5563' }]}
+            onPress={() =>
+              (navigation as any).navigate('EventDetail', {
+                eventId: item._id ?? (item as any).id,
+                role: tab,
+                delegateOrgCode: tab === 'volunteer' ? membershipMap[item._id ?? (item as any).id]?.delegate_org_code : undefined,
+                membership: tab === 'volunteer' ? membershipMap[item._id ?? (item as any).id] : undefined,
+              })
+            }
+          >
+            <Text style={styles.editText}>Details</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );
-
   return (
     <View style={styles.container}>
       <View style={styles.navbar}>
-        {['organizer','delegate','volunteer'].map(r => (
+        {(isAdminAvailable === true
+          ? ['admin']
+          : ['organizer','delegate','volunteer']
+        ).map(r => (
           <TouchableOpacity key={r} style={[styles.navItem, tab === r && styles.navItemActive]} onPress={() => setTab(r as TabRole)}>
             <Text style={[styles.navText, tab === r && styles.navTextActive]}>{r.toUpperCase()}</Text>
           </TouchableOpacity>
@@ -191,6 +248,10 @@ export default function HomeScreen() {
           <TouchableOpacity onPress={onCreate} style={styles.primaryAction}>
             <Text style={styles.primaryActionText}>Create Event</Text>
           </TouchableOpacity>
+        ) : tab === 'admin' ? (
+          <View style={{ paddingVertical: 6 }}>
+            <Text style={{ color: '#065f46' }}>Viewing all events (admin)</Text>
+          </View>
         ) : tab === 'delegate' ? (
           profile ? null : (
             <TouchableOpacity onPress={openJoin} style={styles.primaryAction}>
@@ -304,10 +365,47 @@ export default function HomeScreen() {
         )}
       </View>
     )}
-      {tab === 'volunteer' && volProfile && (
+      {tab === 'volunteer' && (
         <View style={styles.profileCard}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+            <TextInput
+              placeholder="Volunteer join code (from task)"
+              value={taskJoinCode}
+              onChangeText={setTaskJoinCode}
+              style={[styles.modalInput, { flex: 1, marginRight: 8 }]}
+              autoCapitalize="characters"
+            />
+            <TouchableOpacity
+              style={[styles.primaryAction, { backgroundColor: '#2563eb' }]}
+              onPress={async () => {
+                if (!taskJoinCode.trim()) {
+                  Alert.alert('Join failed', 'Enter a task code.');
+                  return;
+                }
+                try {
+                  setLoading(true);
+                  await joinTask(taskJoinCode.trim());
+                  Alert.alert('Joined', 'Task joined successfully.');
+                  setTaskJoinCode('');
+                  // Refresh volunteer profile to reflect any changes
+                  try {
+                    const vp = await fetchVolunteerProfile();
+                    setVolProfile(vp);
+                  } catch {
+                    setVolProfile({ email: '', memberships: [] } as any);
+                  }
+                } catch (e: any) {
+                  Alert.alert('Join failed', e?.message ?? 'Unable to join task');
+                } finally {
+                  setLoading(false);
+                }
+              }}
+            >
+              <Text style={styles.primaryActionText}>Join Task</Text>
+            </TouchableOpacity>
+          </View>
           <Text style={styles.modalTitle}>My Groups</Text>
-          {volProfile.memberships.length === 0 ? (
+          {!volProfile || volProfile.memberships.length === 0 ? (
             <Text style={styles.profileValue}>No groups joined yet.</Text>
           ) : (
             volProfile.memberships.map((m, idx) => (
@@ -347,6 +445,8 @@ export default function HomeScreen() {
               ? 'Create your first event.'
               : tab === 'delegate'
               ? 'Register as a delegate to get your org code.'
+              : tab === 'admin'
+              ? 'No events found in the database.'
               : 'Join with your delegate’s org code.'}
           </Text>
         </View>

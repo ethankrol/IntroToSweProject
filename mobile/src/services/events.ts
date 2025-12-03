@@ -44,6 +44,17 @@ export async function fetchEvents(role: 'organizer' | 'delegate' | 'volunteer'):
     return await res.json();
 }
 
+// Admin: fetch all events if current user has admin privileges
+export async function fetchAdminEvents(): Promise<EventResponse[]> {
+    const headers = await authHeaders();
+    const res = await fetch(`${API_BASE_URL}/admin/events`, { headers });
+    if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Failed to load admin events: ${res.status} ${text}`);
+    }
+    return await res.json();
+}
+
 export async function fetchEventDetails(eventId: string, role: 'organizer' | 'delegate' | 'volunteer', delegateOrgCode?: string): Promise<EventDetail> {
     const headers = await authHeaders();
     const query = new URLSearchParams({ role });
@@ -80,6 +91,34 @@ export async function joinTask(taskCode: string): Promise<TaskResponse> {
     if (!res.ok) {
         const text = await res.text();
         throw new Error(`Join task failed: ${res.status} ${text}`);
+    }
+    return await res.json();
+}
+
+export async function leaveTask(taskId: string): Promise<any> {
+    const headers = await authHeaders();
+    const res = await fetch(`${API_BASE_URL}/tasks/leave`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ task_id: taskId }),
+    });
+    if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Failed to leave task: ${res.status} ${text}`);
+    }
+    return await res.json();
+}
+
+export async function removeDelegateFromEvent(eventId: string, delegateEmail: string): Promise<any> {
+    const headers = await authHeaders();
+    const res = await fetch(`${API_BASE_URL}/delegate/remove/${eventId}`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ delegate_email: delegateEmail }),
+    });
+    if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Failed to remove delegate: ${res.status} ${text}`);
     }
     return await res.json();
 }
@@ -132,6 +171,19 @@ export async function assignDelegate(eventId: string, taskId: string, delegateEm
     if (!res.ok) {
         const text = await res.text();
         throw new Error(`Failed to assign delegate: ${res.status} ${text}`);
+    }
+    return await res.json();
+}
+
+export async function unassignDelegate(eventId: string, taskId: string): Promise<TaskResponse> {
+    const headers = await authHeaders();
+    const res = await fetch(`${API_BASE_URL}/events/${eventId}/tasks/${taskId}/unassign`, {
+        method: 'PATCH',
+        headers,
+    });
+    if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Failed to unassign delegate: ${res.status} ${text}`);
     }
     return await res.json();
 }
@@ -212,12 +264,15 @@ export async function fetchVolunteerProfile(): Promise<VolunteerProfile> {
     return await res.json();
 }
 
-export async function leaveVolunteerGroup(delegateOrgCode?: string): Promise<any> {
+export async function leaveVolunteerGroup(delegateOrgCode?: string, eventId?: string | null): Promise<any> {
     const headers = await authHeaders();
     const res = await fetch(`${API_BASE_URL}/volunteer/leave`, {
         method: 'POST',
         headers,
-        body: JSON.stringify(delegateOrgCode ? { delegate_org_code: delegateOrgCode } : {}),
+        body: JSON.stringify({
+            ...(delegateOrgCode ? { delegate_org_code: delegateOrgCode } : {}),
+            ...(eventId ? { event_id: eventId } : {}),
+        }),
     });
     if (!res.ok) {
         const text = await res.text();

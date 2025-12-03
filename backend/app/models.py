@@ -121,7 +121,7 @@ class TaskBase(BaseModel):
     start_time: datetime = Field(alias="start_time")
     end_time: datetime = Field(alias="end_time")
     max_volunteers: Optional[int] = Field(default=None, alias="max_volunteers")
-    assigned_delegate: str
+    assigned_delegate: Optional[str] = None
     assigned_delegate_org_code: Optional[str] = None
     assigned_delegate_org: Optional[str] = None
     organizer_contact_info: Optional[str] = Field(default=None, alias="organizer_contact_info")
